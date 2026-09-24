@@ -15,7 +15,7 @@
         "data": {
           "brands": "Beer brands",
           "sources": "Deal sources",
-          "custom_urls": "Custom deal page URLs (one per line, {query} and {slug} placeholders allowed)",
+          "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
           "update_time": "Daily check time",
           "update_interval_hours": "Additionally check every N hours (0 = daily only)",
@@ -28,6 +28,9 @@
           "exclude_loyalty": "Skip loyalty-card-only deals",
           "exclude_nonalcoholic": "Skip non-alcoholic beer",
           "max_pages": "Max kupi.cz pages to download"
+        },
+        "data_description": {
+          "custom_urls": "Optional. The URL may contain the placeholder query (searched brand) or slug (brand like pilsner-urquell) wrapped in curly braces – see the README for examples."
         }
       }
     },
@@ -42,7 +45,7 @@
         "data": {
           "brands": "Beer brands",
           "sources": "Deal sources",
-          "custom_urls": "Custom deal page URLs (one per line, {query} and {slug} placeholders allowed)",
+          "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
           "update_time": "Daily check time",
           "update_interval_hours": "Additionally check every N hours (0 = daily only)",
@@ -55,6 +58,9 @@
           "exclude_loyalty": "Skip loyalty-card-only deals",
           "exclude_nonalcoholic": "Skip non-alcoholic beer",
           "max_pages": "Max kupi.cz pages to download"
+        },
+        "data_description": {
+          "custom_urls": "Optional. The URL may contain the placeholder query (searched brand) or slug (brand like pilsner-urquell) wrapped in curly braces – see the README for examples."
         }
       }
     },

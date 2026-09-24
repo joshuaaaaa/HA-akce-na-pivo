@@ -15,7 +15,7 @@
         "data": {
           "brands": "Značky piva",
           "sources": "Zdroje akcí",
-          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek, lze použít {query} a {slug})",
+          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
           "update_time": "Čas denní kontroly",
           "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
@@ -28,6 +28,9 @@
           "exclude_loyalty": "Vynechat akce jen s věrnostní kartou/aplikací",
           "exclude_nonalcoholic": "Vynechat nealko pivo",
           "max_pages": "Max. počet stránek kupi.cz ke stažení"
+        },
+        "data_description": {
+          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README."
         }
       }
     },
@@ -42,7 +45,7 @@
         "data": {
           "brands": "Značky piva",
           "sources": "Zdroje akcí",
-          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek, lze použít {query} a {slug})",
+          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
           "update_time": "Čas denní kontroly",
           "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
@@ -55,6 +58,9 @@
           "exclude_loyalty": "Vynechat akce jen s věrnostní kartou/aplikací",
           "exclude_nonalcoholic": "Vynechat nealko pivo",
           "max_pages": "Max. počet stránek kupi.cz ke stažení"
+        },
+        "data_description": {
+          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README."
         }
       }
     },
