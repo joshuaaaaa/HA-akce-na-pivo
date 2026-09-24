@@ -252,6 +252,26 @@ entities:
   - zone.home
 ```
 
+## Řešení potíží
+
+**Senzory ukazují „Neznámé“ (Unknown).** Akce se stáhly, ale žádná neodpovídá nastavení.
+Otevřete **Nastavení → Zařízení a služby → Akce na pivo → senzor Počet akcí → Atributy**:
+
+- `filter.downloaded`: kolik akcí se celkem stáhlo,
+- `filter.brand_mismatch` / `expired` / `loyalty_excluded` / …: kolik akcí se vyřadilo a proč,
+- `filter.sample_products`: ukázka stažených názvů (produkt | obchod | cena | zdroj). Z ní je vidět,
+  jestli web vrací správná data,
+- `sources.<zdroj>.errors`: chyby jednotlivých webů, třeba `HTTP 403`, „ochrana proti robotům“
+  nebo „parser na stránce nenašel žádnou akci“.
+
+Stejné shrnutí se zapíše i do logu jako varování „Staženo N akcí, ale žádná neodpovídá nastavení“.
+Když chcete nahlásit chybu, pošlete tyto atributy.
+
+**„OpenStreetMap (Overpass) nedostupné“.** Veřejné servery Overpass bývají přetížené.
+Integrace zkusí tři servery a nejdřív přesný dotaz omezený na území státu. Když neuspěje,
+použije rychlejší dotaz jen podle okruhu. Pokud selžou všechny, zkusí to znovu za 30 minut.
+Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
+
 ## Poznámky
 
 - Integrace stahuje veřejné stránky šetrně: pár stránek jednou denně, s pauzami mezi požadavky.

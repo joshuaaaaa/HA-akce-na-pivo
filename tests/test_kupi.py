@@ -112,3 +112,18 @@ def test_brand_and_chain():
     assert chain_key("COOP") == "coop"
     assert not is_nonalcoholic("Radegast 10 % 0,5 l")
     assert is_nonalcoholic("Pilsner Urquell nealko 0,0 %")
+
+
+def test_listing_row_without_product_id_uses_nearest_name():
+    html = """
+    <h1>Akce na pivo levně</h1>
+    <div class="product">
+      <div class="product_name"><h2><a title="Gambrinus Originál 10">Gambrinus</a></h2></div>
+      <div class="discount_row">
+        <div class="discounts_shop_name"><a>Tesco</a></div>
+        <span class="discount_price_value">15,90 Kč</span>
+      </div>
+    </div>
+    """
+    offers = parse_offers(html, "https://www.kupi.cz/slevy/pivo", TODAY)
+    assert [o["product"] for o in offers] == ["Gambrinus Originál 10"]

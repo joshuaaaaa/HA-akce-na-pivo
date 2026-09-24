@@ -586,11 +586,16 @@ def dedupe(offers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def parse_generic(
-    html: str, page_url: str, today: date, source: str, country: str = DEFAULT_COUNTRY
+    html: str,
+    page_url: str,
+    today: date,
+    source: str,
+    country: str = DEFAULT_COUNTRY,
+    heuristics: bool = True,
 ) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
     offers = parse_jsonld(soup, page_url, today, source, country)
     offers += parse_embedded_json(soup, page_url, today, source, country)
-    if not offers:
+    if not offers and heuristics:
         offers = parse_html_cards(soup, page_url, today, source, country)
     return dedupe(offers)

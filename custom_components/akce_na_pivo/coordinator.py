@@ -13,6 +13,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -73,6 +74,7 @@ from .stores import (
 _LOGGER = logging.getLogger(__name__)
 
 REQUEST_DELAY = 0.7
+STORE_RETRY_MINUTES = 30
 NOMINATIM_DELAY = 1.1  # limit Nominatimu 1 dotaz/s
 DEAD_URL_DAYS = 7
 
@@ -115,6 +117,8 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_relocate: datetime | None = None
         self._lock = asyncio.Lock()
         self._status: dict[str, dict[str, Any]] = {}
+        self._filter_stats: dict[str, Any] = {}
+        self._store_retry_unsub: Any = None
 
     # ------------------------------------------------------------------ config
     @property
@@ -239,11 +243,14 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _parse(self, source: str, html: str, url: str, today: date) -> list[dict[str, Any]]:
         if "kupi.cz" in url:
             offers = parse_offers(html, url, today)
-            if offers:
-                for offer in offers:
-                    offer["source"] = source
-                    offer["sources"] = [source]
-                return offers
+            for offer in offers:
+                offer["source"] = source
+                offer["sources"] = [source]
+            if not offers:
+                return parse_generic(html, url, today, source, self.country)
+            # vlastní parser kupi.cz + strukturovaná data stránky (co jeden nenajde, doplní druhý)
+            structured = parse_generic(html, url, today, source, self.country, heuristics=False)
+            return dedupe(offers + structured)
         return parse_generic(html, url, today, source, self.country)
 
     async def _fetch_listing(
@@ -265,6 +272,14 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 break
             page_offers = [o for o in self._parse(source, html, url, today) if o["id"] not in seen]
             if not page_offers:
+                if page == 1:
+                    lowered = html[:20000].lower()
+                    hint = (
+                        "ochrana proti robotům"
+                        if any(w in lowered for w in ("captcha", "cf-challenge", "just a moment"))
+                        else "parser na stránce nenašel žádnou akci"
+                    )
+                    status["errors"].append(f"{url}: HTTP {code}, {len(html)} znaků – {hint}")
                 break
             seen.update(o["id"] for o in page_offers)
             offers.extend(page_offers)
@@ -368,7 +383,17 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             items = await fetch_stores(self.session, lat, lon, radius, self.country)
         except RuntimeError as err:
-            _LOGGER.warning("%s – používám uložené pobočky", err)
+            cached = cache.get("items", [])
+            _LOGGER.warning(
+                "%s – %s, nový pokus za %d min",
+                err,
+                "používám uložené pobočky" if cached else "adresy obchodů zatím nejsou k dispozici",
+                STORE_RETRY_MINUTES,
+            )
+            self._schedule_store_retry()
+            return cached
+        if not items:
+            _LOGGER.warning("V okolí %.4f, %.4f se nenašla žádná pobočka známých řetězců", lat, lon)
             return cache.get("items", [])
         self._cache["stores"] = {
             "fetched": dt_util.utcnow().isoformat(),
@@ -436,6 +461,14 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         exclude_loyalty = bool(self.opt(CONF_EXCLUDE_LOYALTY, DEFAULT_EXCLUDE_LOYALTY))
         exclude_na = bool(self.opt(CONF_EXCLUDE_NONALCOHOLIC, DEFAULT_EXCLUDE_NONALCOHOLIC))
         result = []
+        stats = {
+            "downloaded": len(offers),
+            "brand_mismatch": 0,
+            "expired": 0,
+            "upcoming_excluded": 0,
+            "loyalty_excluded": 0,
+            "nonalcoholic_excluded": 0,
+        }
         for offer in offers:
             brand = (
                 match_brand(offer["product"], self.brands)
@@ -446,17 +479,37 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
             if not brand:
+                stats["brand_mismatch"] += 1
                 continue
             if offer["valid_to"] and date.fromisoformat(offer["valid_to"]) < today:
+                stats["expired"] += 1
                 continue
             upcoming = bool(offer["valid_from"] and date.fromisoformat(offer["valid_from"]) > today)
             if upcoming and not include_upcoming:
+                stats["upcoming_excluded"] += 1
                 continue
             if exclude_loyalty and offer["loyalty"]:
+                stats["loyalty_excluded"] += 1
                 continue
             if exclude_na and offer["nonalcoholic"]:
+                stats["nonalcoholic_excluded"] += 1
                 continue
             result.append({**offer, "brand": brand, "upcoming": upcoming})
+        stats["matching"] = len(result)
+        # ukázka stažených názvů – podle ní jde poznat, proč nic neodpovídá značkám
+        stats["sample_products"] = [
+            f"{o['product']} | {o['shop']} | {o['price']} | {o.get('source')}" for o in offers[:15]
+        ]
+        self._filter_stats = stats
+        if offers and not result:
+            _LOGGER.warning(
+                "Staženo %d akcí, ale žádná neodpovídá nastavení (značky: %s). Vyřazeno: %s. "
+                "Ukázka stažených akcí: %s",
+                len(offers),
+                ", ".join(self.brands),
+                {k: v for k, v in stats.items() if k.endswith(("mismatch", "expired", "excluded"))},
+                "; ".join(stats["sample_products"][:8]),
+            )
         return result
 
     def _history_key(self, offer: dict[str, Any]) -> str:
@@ -590,6 +643,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "updated": dt_util.now().isoformat(),
             "total_found": len(offers),
             "sources": self._status,
+            "filter_stats": self._filter_stats,
             "country": self.country,
             "currency": self.currency,
             "currency_symbol": self.currency_symbol,
@@ -627,6 +681,29 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._fire_alerts(result["offers"])
         await self._async_save()
         return result
+
+    def _schedule_store_retry(self) -> None:
+        """Po výpadku OpenStreetMap zkusí pobočky načíst znovu, bez nového stahování akcí."""
+        if self._store_retry_unsub is not None:
+            return
+
+        async def _retry(_now: Any) -> None:
+            self._store_retry_unsub = None
+            if not self._raw_offers:
+                return
+            async with self._lock:
+                result = await self._process(self._raw_offers, dt_util.now().date())
+            self.async_set_updated_data(result)
+
+        self._store_retry_unsub = async_call_later(
+            self.hass, timedelta(minutes=STORE_RETRY_MINUTES), _retry
+        )
+        self.entry.async_on_unload(self._cancel_store_retry)
+
+    def _cancel_store_retry(self) -> None:
+        if self._store_retry_unsub is not None:
+            self._store_retry_unsub()
+            self._store_retry_unsub = None
 
     async def async_relocate(self) -> None:
         """Přepočítá vzdálenosti po změně polohy bez nového stahování akcí."""

@@ -336,7 +336,8 @@ KUPI_PRODUCT_URL = "https://www.kupi.cz/sleva/{slug}"
 
 OVERPASS_URLS = (
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 )
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 

@@ -56,6 +56,38 @@ def store_chain(tags: dict[str, str]) -> str | None:
     return None
 
 
+# OSM relace států – oblast pro Overpass (id relace + 3600000000)
+COUNTRY_AREA_IDS = {"CZ": 3600051684, "SK": 3600014296}
+OVERPASS_TIMEOUT = 45
+
+
+def _describe(err: BaseException) -> str:
+    """Čitelný popis chyby (TimeoutError má prázdný text)."""
+    if isinstance(err, asyncio.TimeoutError):
+        return "časový limit vypršel"
+    if isinstance(err, aiohttp.ClientResponseError):
+        return f"HTTP {err.status}"
+    return f"{type(err).__name__}: {err}" if str(err) else type(err).__name__
+
+
+async def _overpass(session: aiohttp.ClientSession, query: str) -> dict[str, Any]:
+    errors: list[str] = []
+    for url in OVERPASS_URLS:
+        try:
+            async with session.post(
+                url,
+                data={"data": query},
+                headers={"User-Agent": OSM_USER_AGENT},
+                timeout=aiohttp.ClientTimeout(total=OVERPASS_TIMEOUT + 15),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+            errors.append(f"{url.split('/')[2]}: {_describe(err)}")
+            _LOGGER.debug("Overpass %s selhal: %s", url, _describe(err))
+    raise RuntimeError("OpenStreetMap (Overpass) nedostupné – " + "; ".join(errors))
+
+
 async def fetch_stores(
     session: aiohttp.ClientSession,
     lat: float,
@@ -63,33 +95,40 @@ async def fetch_stores(
     radius_km: float,
     country: str = DEFAULT_COUNTRY,
 ) -> list[dict[str, Any]]:
-    """Stáhne obchody v okolí (jedním dotazem) a přiřadí je k řetězcům."""
-    radius_m = int(max(1.0, radius_km) * 1000)
-    # jen obchody uvnitř hranic zvolené země (u hranic by jinak přišly i pobočky v sousední zemi)
-    query = (
-        "[out:json][timeout:60];"
-        f'area["ISO3166-1"="{country}"][admin_level=2]->.land;'
-        f'nwr["shop"~"^({SHOP_TYPES})$"](area.land)(around:{radius_m},{lat},{lon});'
-        "out center tags;"
-    )
-    last_error: Exception | None = None
-    for url in OVERPASS_URLS:
-        try:
-            async with session.post(
-                url,
-                data={"data": query},
-                headers={"User-Agent": OSM_USER_AGENT},
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as resp:
-                resp.raise_for_status()
-                payload = await resp.json(content_type=None)
-            break
-        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
-            last_error = err
-            _LOGGER.debug("Overpass %s selhal: %s", url, err)
-    else:
-        raise RuntimeError(f"OpenStreetMap (Overpass) nedostupné: {last_error}")
+    """Stáhne obchody v okolí a přiřadí je k řetězcům.
 
+    Nejdřív zkusí dotaz omezený na území státu (přesné u hranic). Ten bývá na
+    vytížených serverech pomalý, proto se při chybě nebo prázdném výsledku použije
+    rychlý dotaz jen podle okruhu a stát se ověří podle souřadnic a addr:country.
+    """
+    radius_m = int(max(1.0, radius_km) * 1000)
+    shops = f'nwr["shop"~"^({SHOP_TYPES})$"]'
+    around = f"(around:{radius_m},{lat},{lon})"
+    queries = []
+    if country in COUNTRY_AREA_IDS:
+        queries.append(
+            f"[out:json][timeout:{OVERPASS_TIMEOUT}];"
+            f"area(id:{COUNTRY_AREA_IDS[country]})->.land;"
+            f"{shops}(area.land){around};out center tags;"
+        )
+    queries.append(f"[out:json][timeout:{OVERPASS_TIMEOUT}];{shops}{around};out center tags;")
+
+    last_error: RuntimeError | None = None
+    for query in queries:
+        try:
+            payload = await _overpass(session, query)
+        except RuntimeError as err:
+            last_error = err
+            continue
+        stores = _parse_stores(payload, country)
+        if stores:
+            return stores
+    if last_error:
+        raise last_error
+    return []
+
+
+def _parse_stores(payload: dict[str, Any], country: str) -> list[dict[str, Any]]:
     stores: list[dict[str, Any]] = []
     for element in payload.get("elements", []):
         tags = element.get("tags") or {}

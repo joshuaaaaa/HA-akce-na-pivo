@@ -159,7 +159,7 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, hass_client, 
     overpass_query = next(
         c[2]["data"] for c in aioclient_mock.mock_calls if "overpass" in str(c[1])
     )
-    assert 'area["ISO3166-1"="CZ"]' in overpass_query
+    assert "area(id:3600051684)" in overpass_query  # území ČR
     assert top[2]["address"] == "Vodičkova 10, 11000 Praha"
     assert top[2]["distance_km"] < 2
     assert "Končí dnes" in top[0]["flags"]
@@ -184,6 +184,10 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, hass_client, 
     assert sources["kupi"]["offers"] == 3
     assert sources["kompasslev"]["offers"] == 3
     assert sources["cenito"]["offers"] == 0 and sources["cenito"]["errors"]
+    stats = count.attributes["filter"]
+    assert stats["downloaded"] >= 6 and stats["matching"] == 4
+    assert stats["brand_mismatch"] == 2  # Kozel a Gambrinus z Kompasu Slev nejsou vybrané
+    assert any("Pilsner Urquell" in line for line in stats["sample_products"])
 
     # karta dodávaná s integrací
     client = await hass_client()
@@ -323,7 +327,7 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     assert "Pod limitem 0.7 €/0,5 l" in top[0]["flags"]
 
     query = next(c[2]["data"] for c in aioclient_mock.mock_calls if "overpass" in str(c[1]))
-    assert 'area["ISO3166-1"="SK"]' in query
+    assert "area(id:3600014296)" in query  # území SK
 
     where = hass.states.get("sensor.pivo_sk_where_to_buy_beer")
     assert where.state == "Kaufland"

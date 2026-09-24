@@ -226,11 +226,31 @@ def _product_lookup(soup: BeautifulSoup) -> dict[str, dict[str, str]]:
     return products
 
 
+def _ancestor_name(row: Any) -> str:
+    """Název produktu z nejbližšího nadřazeného bloku (když chybí data-product-id)."""
+    node = row
+    for _ in range(6):
+        node = node.parent
+        if node is None:
+            return ""
+        found = node.select_one(".product_name h2 a[title], .product_name a[title], h2 a[title]")
+        if found:
+            return clean_text(found["title"])
+        found = node.select_one(".product_name, h2, h3")
+        if found:
+            text = clean_text(found.get_text(" ", strip=True))
+            if text:
+                return text
+    return ""
+
+
 def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]]:
     """Najde všechny akční nabídky (řádky slev) na stránce kupi.cz."""
     soup = BeautifulSoup(html, "html.parser")
     products = _product_lookup(soup)
     page_title = _text(soup, "h1")
+    # nadpis stránky je název produktu jen na detailu (/sleva/...), ne na výpisu kategorie
+    is_detail = "/sleva/" in source_url
     offers: list[dict[str, Any]] = []
 
     for row in soup.select(".discount_row"):
@@ -239,7 +259,7 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
             parent = row.find_parent(attrs={"data-product-id": True})
             product_id = str(parent.get("data-product-id")) if parent else ""
         product = products.get(product_id, {})
-        name = product.get("name") or page_title
+        name = product.get("name") or _ancestor_name(row) or (page_title if is_detail else "")
         shop = _text(row, ".discounts_shop_name a, .discounts_shop_name")
         price = parse_price(_text(row, ".discount_price_value, .discount_price"))
         if not name or not shop or price is None:
