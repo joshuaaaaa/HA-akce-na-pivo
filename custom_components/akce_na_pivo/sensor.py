@@ -15,7 +15,6 @@ from .const import ALL_BRANDS, SORT_PRICE
 from .coordinator import BeerDealsCoordinator
 from .entity import BeerEntity, offer_attributes
 
-
 CARD_OFFERS = 15
 
 
