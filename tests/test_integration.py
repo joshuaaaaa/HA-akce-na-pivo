@@ -165,6 +165,13 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, hass_client, 
     assert "Končí dnes" in top[0]["flags"]
     assert cheapest.attributes["upcoming"][0]["shop"] == "Lidl"
 
+    where = hass.states.get("sensor.pivo_where_to_buy_beer")
+    assert where.state == "Penny"
+    assert where.attributes["summary"].startswith("Penny, Seifertova 1, 13000 Praha")
+    where_pu = hass.states.get("sensor.pivo_where_to_buy_pilsner_urquell")
+    assert where_pu.state == "Kaufland"  # Kompas Slev 19,90 Kč < Albert 24,90 Kč
+    assert hass.states.get("sensor.pivo_where_to_buy_moje_pivo").state == "unknown"
+
     rank1 = [s for s in hass.states.async_all("sensor") if s.attributes.get("rank") == 1]
     assert rank1 and rank1[0].attributes["latitude"] == 50.09
 
@@ -317,3 +324,8 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
 
     query = next(c[2]["data"] for c in aioclient_mock.mock_calls if "overpass" in str(c[1]))
     assert 'area["ISO3166-1"="SK"]' in query
+
+    where = hass.states.get("sensor.pivo_sk_where_to_buy_beer")
+    assert where.state == "Kaufland"
+    assert "0,69 €" in where.attributes["summary"]
+    assert hass.states.get("sensor.pivo_sk_where_to_buy_saris").state == "COOP Jednota"

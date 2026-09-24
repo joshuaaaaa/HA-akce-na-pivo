@@ -87,6 +87,12 @@
       },
       "brand": {
         "name": "{brand}"
+      },
+      "where": {
+        "name": "Kam pro pivo"
+      },
+      "where_brand": {
+        "name": "Kam pro {brand}"
       }
     },
     "binary_sensor": {

@@ -37,9 +37,11 @@ async def async_setup_entry(
     ]
     top_count = coordinator.data.get("top_count", 5) if coordinator.data else 5
     entities += [RankSensor(coordinator, rank) for rank in range(1, top_count + 1)]
-    entities += [
-        BrandSensor(coordinator, brand) for brand in coordinator.brands if brand != ALL_BRANDS
-    ]
+    brands = [brand for brand in coordinator.brands if brand != ALL_BRANDS]
+    entities += [BrandSensor(coordinator, brand) for brand in brands]
+    # "Kam pro pivo" – název obchodu, kam jít (celkově nejlevnější + pro každou značku)
+    entities.append(WhereToGoSensor(coordinator))
+    entities += [WhereToGoSensor(coordinator, brand) for brand in brands]
     async_add_entities(entities)
 
 
@@ -209,3 +211,60 @@ class BrandSensor(CurrencyUnit, BeerEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return offer_attributes(self._offer)
+
+
+def _money(value: float | None, symbol: str) -> str:
+    if value is None:
+        return ""
+    return f"{value:,.2f}".replace(",", " ").replace(".", ",") + f" {symbol}"
+
+
+class WhereToGoSensor(BeerEntity, SensorEntity):
+    """Název obchodu, kam jít pro nejlevnější pivo (celkově, nebo vybranou značku)."""
+
+    _attr_icon = "mdi:store-marker"
+
+    def __init__(self, coordinator: BeerDealsCoordinator, brand: str | None = None) -> None:
+        key = f"where_{slugify(brand)}" if brand else "where"
+        super().__init__(coordinator, key)
+        self._brand = brand
+        if brand:
+            self._attr_translation_key = "where_brand"
+            self._attr_translation_placeholders = {"brand": brand}
+        else:
+            self._attr_translation_key = "where"
+
+    @property
+    def _offer(self) -> dict[str, Any] | None:
+        data = self.coordinator.data or {}
+        if self._brand:
+            return (data.get("brands") or {}).get(self._brand)
+        top = data.get("top") or []
+        return top[0] if top else None
+
+    @property
+    def native_value(self) -> str | None:
+        offer = self._offer
+        if not offer:
+            return None
+        return (offer.get("store_name") or offer["shop"])[:255]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        offer = self._offer
+        attrs = offer_attributes(offer)
+        if offer:
+            symbol = self.coordinator.currency_symbol
+            parts = [offer.get("store_name") or offer["shop"]]
+            if offer.get("address"):
+                parts.append(offer["address"])
+            where = ", ".join(parts)
+            if offer.get("distance_km") is not None:
+                where += f" ({offer['distance_km']:.1f} km)".replace(".", ",")
+            price = _money(offer["price"], symbol)
+            if offer.get("price_per_half_liter"):
+                price += f" – {_money(offer['price_per_half_liter'], symbol)}/0,5 l"
+            attrs["summary"] = f"{where}: {offer['product']} za {price}"
+            attrs["currency_symbol"] = symbol
+            attrs["for_brand"] = self._brand
+        return attrs

@@ -87,6 +87,12 @@
       },
       "brand": {
         "name": "{brand}"
+      },
+      "where": {
+        "name": "Where to buy beer"
+      },
+      "where_brand": {
+        "name": "Where to buy {brand}"
       }
     },
     "binary_sensor": {

@@ -2,8 +2,14 @@
 
 Integrace pro Home Assistant, která každý den (nebo v čase, který si nastavíte) zjistí,
 **kde je nejlevnější pivo v akci**, najde **nejbližší pobočku** daného obchodu k vašemu
-domovu nebo k poloze vašeho telefonu a ukáže ji **na mapě**. Součástí je samostatná
-Lovelace karta `akce-na-pivo-card`.
+domovu nebo k poloze vašeho telefonu a ukáže ji **na mapě**. Senzor **Kam pro pivo**
+rovnou řekne, do kterého obchodu jít.
+
+Ke stažení jsou dvě Lovelace karty:
+- 🍺 **[Pivní karta](#pivní-karta)** (`custom:pivni-karta`): samostatná karta na pivním pozadí
+  s pěnou a bublinkami. Přidáte ji vložením souboru do `www`.
+- **[Seznam akcí s mapou](#karta-součást-custom-component)** (`custom:akce-na-pivo-card`):
+  přibalená v integraci, načte se sama.
 
 - **Česko 🇨🇿 nebo Slovensko 🇸🇰**: zemi vyberete při přidání integrace.
 - Ceny z více webů s letákovými akcemi (Albert, Billa, Globus, Kaufland, Lidl, Penny, Tesco,
@@ -104,6 +110,54 @@ Zkopírujte `custom_components/akce_na_pivo` do `/config/custom_components/` a r
 Potom: **Nastavení → Zařízení a služby → Přidat integraci → Akce na pivo**.
 Všechno jde později změnit přes **Konfigurovat**.
 
+## Pivní karta
+
+Samostatná karta `custom:pivni-karta` v souboru [`www/pivni-karta.js`](www/pivni-karta.js).
+Na první pohled ukáže, **kam jít pro pivo**:
+
+- nahoře „pěna“ s nadpisem a vlajkou země, pod ní pivní pozadí s bublinkami,
+- velké **„Dnes jdi do: Kaufland“**, adresa, vzdálenost a otevírací doba,
+- produkt, cena, cena za 0,5 l, přeškrtnutá původní cena a štítek se slevou,
+- štítky jako „Nejlevněji za posledních 120 dní“ nebo „Končí dnes“,
+- tlačítka **Navigovat**, **Mapa** a **Leták**,
+- **přepínač značek** (Vše / Kozel / Pilsner Urquell…): po klepnutí na značku ukáže, kam jít pro ni,
+- mapu s označeným obchodem a žebříček nejlevnějších akcí.
+
+### Instalace (vložením do `www`)
+
+1. Stáhněte [`www/pivni-karta.js`](www/pivni-karta.js) a uložte ho do Home Assistantu jako
+   `/config/www/pivni-karta.js`. Složku `www` v případě potřeby vytvořte. Po jejím
+   prvním vytvoření restartujte HA.
+2. **Nastavení → Ovládací panely → ⋮ (vpravo nahoře) → Zdroje → Přidat zdroj**
+   - URL: `/local/pivni-karta.js`
+   - Typ zdroje: **JavaScript modul**
+3. Obnovte prohlížeč (Ctrl+F5, v mobilní aplikaci vymažte mezipaměť frontendu).
+4. Upravit ovládací panel → **Přidat kartu** → vyhledejte **Pivní karta**. Má grafický editor.
+   Nebo použijte YAML:
+
+```yaml
+type: custom:pivni-karta
+entity: sensor.akce_na_pivo_nejlevnejsi_pivo   # hlavní senzor integrace
+title: Kam na pivo
+brand: ""            # výchozí značka, např. "Kozel"; prázdné = všechny
+count: 5             # počet akcí v žebříčku
+show_brands: true    # přepínač značek
+show_map: true       # mapa obchodu (OpenStreetMap)
+map_height: 180
+show_list: true      # žebříček nejlevnějších
+bubbles: true        # animované bublinky (vypnou se i při „omezit pohyb“ v systému)
+```
+
+Po aktualizaci souboru změňte URL zdroje na `/local/pivni-karta.js?v=2`, aby prohlížeč
+nenačítal starou verzi z mezipaměti.
+
+> **HACS (custom repository):** HACS umí jako *Dashboard* (plugin) přidat jen repozitář,
+> který obsahuje právě kartu. V jednom repozitáři nemůže být zároveň integrace a karta.
+> Pokud chcete kartu instalovat přes HACS, založte samostatný repozitář
+> (např. `pivni-karta`) se souborem `pivni-karta.js` v kořeni a souborem `hacs.json`:
+> `{"name": "Pivní karta", "filename": "pivni-karta.js", "render_readme": true}`.
+> Pak ho v HACS přidejte přes **⋮ → Vlastní repozitáře**, kategorie **Dashboard**.
+
 ## Karta (součást custom component)
 
 Karta `custom:akce-na-pivo-card` je přibalená přímo v integraci
@@ -143,6 +197,8 @@ zobrazí vložený OpenStreetMap.
 | `sensor.*_nejlevnejsi_pivo_za_0_5_l` | Kč (€)/0,5 l | vhodné do grafu historie |
 | `sensor.*_pivo_1` … `_pivo_N` | cena balení | mají `latitude`/`longitude`, takže je zobrazí i standardní karta Mapa |
 | `sensor.*_<značka>` | cena | nejlevnější akce každé vybrané značky |
+| `sensor.*_kam_pro_pivo` | **název obchodu**, např. `Kaufland` | kam jít pro celkově nejlevnější pivo; atributy `address`, `distance_km`, `navigate_url`, `product`, `price` a `summary` („Kaufland, Bělehradská 118, Praha (1,2 km): Kozel 11 0,5 l za 13,90 Kč“) |
+| `sensor.*_kam_pro_<značka>` | **název obchodu** | kam jít pro konkrétní vybranou značku |
 | `binary_sensor.*_levne_pivo_pod_limitem` | on/off | je v akci pivo pod limitem? |
 | `button.*_aktualizovat_akce` | – | okamžitá aktualizace |
 | `sensor.*_pocet_akci` | počet | diagnostika: stav každého zdroje (akce, funkční URL, chyby) |
@@ -165,6 +221,25 @@ automation:
             {{ trigger.event.data.address }} – {{ trigger.event.data.distance_km }} km,
             platí do {{ trigger.event.data.valid_to }}
 ```
+
+### Příklad: každé ráno, kam jít na pivo
+
+```yaml
+automation:
+  - alias: Kam pro pivo
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    action:
+      - service: notify.mobile_app_telefon
+        data:
+          title: "🍺 Dnes jdi do: {{ states('sensor.akce_na_pivo_kam_pro_pivo') }}"
+          message: "{{ state_attr('sensor.akce_na_pivo_kam_pro_pivo', 'summary') }}"
+          data:
+            url: "{{ state_attr('sensor.akce_na_pivo_kam_pro_pivo', 'navigate_url') }}"
+```
+
+Nebo jednoduše v kartě Entity: `sensor.akce_na_pivo_kam_pro_pivo` ukáže název obchodu.
 
 ### Standardní karta Mapa
 
