@@ -86,7 +86,7 @@ def auto_enable(enable_custom_integrations):
         yield
 
 
-async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, hass_client, freezer) -> None:
+async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     freezer.move_to("2026-09-23 10:00:00+02:00")
     hass.config.latitude, hass.config.longitude = 50.087, 14.421
     aioclient_mock.get("https://www.kupi.cz/slevy/pivo", text=HTML)
@@ -188,12 +188,6 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, hass_client, 
     assert stats["downloaded"] >= 6 and stats["matching"] == 4
     assert stats["brand_mismatch"] == 2  # Kozel a Gambrinus z Kompasu Slev nejsou vybrané
     assert any("Pilsner Urquell" in line for line in stats["sample_products"])
-
-    # karta dodávaná s integrací
-    client = await hass_client()
-    resp = await client.get("/akce_na_pivo/akce-na-pivo-card.js")
-    assert resp.status == 200
-    assert "akce-na-pivo-card" in await resp.text()
 
     # telefon v zahraničí -> vzdálenosti se počítají od domova v ČR
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data

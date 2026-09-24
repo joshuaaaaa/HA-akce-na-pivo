@@ -5,11 +5,12 @@ Integrace pro Home Assistant, která každý den (nebo v čase, který si nastav
 domovu nebo k poloze vašeho telefonu a ukáže ji **na mapě**. Senzor **Kam pro pivo**
 rovnou řekne, do kterého obchodu jít.
 
-Ke stažení jsou dvě Lovelace karty:
-- 🍺 **[Pivní karta](#pivní-karta)** (`custom:pivni-karta`): samostatná karta na pivním pozadí
-  s pěnou a bublinkami. Přidáte ji vložením souboru do `www`.
-- **[Seznam akcí s mapou](#karta-součást-custom-component)** (`custom:akce-na-pivo-card`):
-  přibalená v integraci, načte se sama.
+Ve složce [`www/`](www) jsou dvě samostatné Lovelace karty. Do Home Assistantu je
+přidáte ručně (viz [Lovelace karty](#lovelace-karty-složka-www)):
+- 🍺 **[Pivní karta](#-pivní-karta)** (`custom:pivni-karta`): karta na pivním pozadí
+  s pěnou a bublinkami, „Dnes jdi do: …“, přepínač značek a obalu,
+- 🗺️ **[Seznam akcí s mapou](#️-seznam-akcí-s-mapou)** (`custom:akce-na-pivo-card`):
+  žebříček akcí a mapa se všemi obchody.
 
 - **Česko 🇨🇿 nebo Slovensko 🇸🇰**: zemi vyberete při přidání integrace.
 - Ceny z více webů s letákovými akcemi (Albert, Billa, Globus, Kaufland, Lidl, Penny, Tesco,
@@ -111,10 +112,43 @@ Zkopírujte `custom_components/akce_na_pivo` do `/config/custom_components/` a r
 Potom: **Nastavení → Zařízení a služby → Přidat integraci → Akce na pivo**.
 Všechno jde později změnit přes **Konfigurovat**.
 
-## Pivní karta
+Integrace vytvoří senzory. Karty do ovládacího panelu se instalují zvlášť, viz
+[Lovelace karty](#lovelace-karty-složka-www).
 
-Samostatná karta `custom:pivni-karta` v souboru [`www/pivni-karta.js`](www/pivni-karta.js).
-Na první pohled ukáže, **kam jít pro pivo**:
+## Lovelace karty (složka `www`)
+
+Obě karty jsou samostatné soubory ve složce [`www/`](www). Integrace je sama nenačítá, přidáte
+je ručně. Stejný postup platí pro obě:
+
+1. Stáhněte soubor karty a uložte ho do Home Assistantu do složky `/config/www/`:
+   - [`www/pivni-karta.js`](www/pivni-karta.js) → `/config/www/pivni-karta.js`
+   - [`www/akce-na-pivo-card.js`](www/akce-na-pivo-card.js) → `/config/www/akce-na-pivo-card.js`
+
+   Soubor nahrajete třeba doplňkem *File editor* nebo *Samba share*. Když složka `www`
+   ještě neexistuje, vytvořte ji a restartujte HA, jinak se soubory na adrese `/local/`
+   nezobrazí.
+2. **Nastavení → Ovládací panely → ⋮ (vpravo nahoře) → Zdroje → Přidat zdroj**
+   (zdroje se zobrazí jen se zapnutým *Rozšířeným režimem* v profilu uživatele):
+   - URL: `/local/pivni-karta.js` nebo `/local/akce-na-pivo-card.js`
+   - Typ zdroje: **JavaScript modul**
+3. Obnovte prohlížeč (Ctrl+F5; v mobilní aplikaci *Nastavení → Companion app → Ladění →
+   Obnovit mezipaměť frontendu*).
+4. Upravit ovládací panel → **Přidat kartu** → vyhledejte **Pivní karta** nebo **Akce na pivo**.
+   Obě karty mají grafický editor.
+
+**Aktualizace karty:** přepište soubor v `/config/www/` a u zdroje zvyšte číslo verze v URL,
+např. `/local/pivni-karta.js?v=4`, aby prohlížeč nenačítal starou verzi z mezipaměti.
+
+> **HACS (custom repository):** HACS umí jako *Dashboard* (plugin) přidat jen repozitář,
+> který obsahuje právě kartu. V jednom repozitáři nemůže být zároveň integrace a karta.
+> Pokud chcete kartu instalovat přes HACS, založte samostatný repozitář s daným `.js`
+> souborem v kořeni a souborem `hacs.json`, např.
+> `{"name": "Pivní karta", "filename": "pivni-karta.js", "render_readme": true}`.
+> Pak ho v HACS přidejte přes **⋮ → Vlastní repozitáře**, kategorie **Dashboard**.
+
+### 🍺 Pivní karta
+
+`custom:pivni-karta` ukáže na první pohled, **kam jít pro pivo**:
 
 - nahoře „pěna“ s nadpisem a vlajkou země, pod ní pivní pozadí s bublinkami,
 - velké **„Dnes jdi do: Kaufland“**, adresa, vzdálenost a otevírací doba,
@@ -124,18 +158,6 @@ Na první pohled ukáže, **kam jít pro pivo**:
 - **přepínač značek** (Vše / Kozel / Pilsner Urquell…): po klepnutí na značku ukáže, kam jít pro ni,
 - **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“,
 - mapu s označeným obchodem a žebříček nejlevnějších akcí.
-
-### Instalace (vložením do `www`)
-
-1. Stáhněte [`www/pivni-karta.js`](www/pivni-karta.js) a uložte ho do Home Assistantu jako
-   `/config/www/pivni-karta.js`. Složku `www` v případě potřeby vytvořte. Po jejím
-   prvním vytvoření restartujte HA.
-2. **Nastavení → Ovládací panely → ⋮ (vpravo nahoře) → Zdroje → Přidat zdroj**
-   - URL: `/local/pivni-karta.js`
-   - Typ zdroje: **JavaScript modul**
-3. Obnovte prohlížeč (Ctrl+F5, v mobilní aplikaci vymažte mezipaměť frontendu).
-4. Upravit ovládací panel → **Přidat kartu** → vyhledejte **Pivní karta**. Má grafický editor.
-   Nebo použijte YAML:
 
 ```yaml
 type: custom:pivni-karta
@@ -152,27 +174,16 @@ show_list: true      # žebříček nejlevnějších
 bubbles: true        # animované bublinky (vypnou se i při „omezit pohyb“ v systému)
 ```
 
-Po aktualizaci souboru změňte URL zdroje na `/local/pivni-karta.js?v=2`, aby prohlížeč
-nenačítal starou verzi z mezipaměti.
+### 🗺️ Seznam akcí s mapou
 
-> **HACS (custom repository):** HACS umí jako *Dashboard* (plugin) přidat jen repozitář,
-> který obsahuje právě kartu. V jednom repozitáři nemůže být zároveň integrace a karta.
-> Pokud chcete kartu instalovat přes HACS, založte samostatný repozitář
-> (např. `pivni-karta`) se souborem `pivni-karta.js` v kořeni a souborem `hacs.json`:
-> `{"name": "Pivní karta", "filename": "pivni-karta.js", "render_readme": true}`.
-> Pak ho v HACS přidejte přes **⋮ → Vlastní repozitáře**, kategorie **Dashboard**.
+`custom:akce-na-pivo-card` zobrazí žebříček nejlevnějších akcí a nad ním **mapu se všemi
+obchody** (očíslované špendlíky podle pořadí) a vaší polohou 🏠.
 
-## Karta (součást custom component)
-
-Karta `custom:akce-na-pivo-card` je přibalená přímo v integraci
-(`custom_components/akce_na_pivo/frontend/akce-na-pivo-card.js`). **Nic nekopírujete ani
-nepřidáváte do zdrojů**: integrace ji sama zpřístupní na `/akce_na_pivo/akce-na-pivo-card.js`
-a zaregistruje ji ve frontendu. Po instalaci a restartu stačí obnovit prohlížeč (Ctrl+F5)
-a v ovládacím panelu přidat kartu **Akce na pivo**. Má i grafický editor.
-
-Kdyby se karta v nabídce neobjevila (třeba bez `default_config`), přidejte zdroj ručně:
-**Nastavení → Ovládací panely → ⋮ → Zdroje** → URL `/akce_na_pivo/akce-na-pivo-card.js`,
-typ *JavaScript modul*.
+- Klepnutím na nabídku nebo na špendlík se obchod na mapě přiblíží a zvýrazní. Objeví se
+  odkazy **Mapy.com**, **Navigovat** a **Leták**.
+- Mapou jde posouvat tažením. Tlačítka **+ / −** mění přiblížení, **⤢** ukáže všechny obchody.
+- Mapa se kreslí přímo z dlaždic OpenStreetMap, bez externích knihoven. Stačí přístup
+  prohlížeče na `tile.openstreetmap.org`.
 
 ```yaml
 type: custom:akce-na-pivo-card
@@ -189,9 +200,9 @@ show_source: true   # štítek, ze kterého webu akce pochází
 show_upcoming: false
 ```
 
-Klepnutím na nabídku se na mapě zvýrazní obchod a objeví se odkazy **Mapy.com**,
-**Navigovat** a **Leták**. Mapa používá Leaflet z CDN. Když se nenačte, karta
-zobrazí vložený OpenStreetMap.
+> Starší verze integrace kartu `akce-na-pivo-card` načítaly samy z adresy
+> `/akce_na_pivo/akce-na-pivo-card.js`. Tato adresa už neexistuje. Pokud jste ji přidali jako
+> zdroj, smažte ho a přidejte `/local/akce-na-pivo-card.js`.
 
 ## Entity
 

@@ -1,16 +1,21 @@
 /*
  * Akce na pivo – Lovelace karta (custom:akce-na-pivo-card)
- * Dodává ji integrace "akce_na_pivo" a Home Assistant ji načte automaticky
- * z /akce_na_pivo/akce-na-pivo-card.js – není potřeba přidávat zdroj ručně.
- * Zobrazuje N nejlevnějších akcí na pivo, obchod, adresu, vzdálenost, zdroj a mapu.
+ * Seznam nejlevnějších akcí na pivo s mapou obchodů pro integraci "akce_na_pivo".
+ *
+ * Instalace:
+ *   1. zkopírujte soubor do /config/www/akce-na-pivo-card.js
+ *   2. Nastavení → Ovládací panely → ⋮ → Zdroje → Přidat zdroj
+ *        URL: /local/akce-na-pivo-card.js      Typ: JavaScript modul
+ *   3. do dashboardu přidejte kartu "Akce na pivo" (type: custom:akce-na-pivo-card)
+ *
+ * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "2.0.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const PACKAGING_ICONS = { glass: "🍾 sklo", can: "🥫 plech", pet: "🧴 PET" };
-const LEAFLET_VERSION = "1.9.4";
-const LEAFLET_JS = `https://cdn.jsdelivr.net/npm/leaflet@${LEAFLET_VERSION}/dist/leaflet.js`;
-const LEAFLET_CSS = `https://cdn.jsdelivr.net/npm/leaflet@${LEAFLET_VERSION}/dist/leaflet.css`;
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE = 256;
 
 console.info(
   `%c AKCE-NA-PIVO-CARD %c v${CARD_VERSION} `,
@@ -18,24 +23,15 @@ console.info(
   "color:#d98e04;background:#fff3d6"
 );
 
-let leafletPromise;
-function loadLeaflet() {
-  if (window.L) return Promise.resolve(window.L);
-  if (!leafletPromise) {
-    leafletPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = LEAFLET_JS;
-      script.async = true;
-      script.onload = () => (window.L ? resolve(window.L) : reject(new Error("Leaflet")));
-      script.onerror = () => {
-        leafletPromise = undefined;
-        reject(new Error("Leaflet se nepodařilo načíst"));
-      };
-      document.head.appendChild(script);
-    });
-  }
-  return leafletPromise;
-}
+// Web Mercator – převod GPS na pixely světové mapy v daném zoomu
+const project = (lat, lon, z) => {
+  const scale = TILE * 2 ** z;
+  const sin = Math.sin((Math.max(-85, Math.min(85, lat)) * Math.PI) / 180);
+  return {
+    x: ((lon + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale,
+  };
+};
 
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -62,8 +58,8 @@ class AkceNaPivoCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._selected = 0;
-    this._map = null;
-    this._markers = [];
+    this._view = null; // {z, cx, cy}; null = automaticky ukázat všechny obchody
+    this._resize = null;
     this._lastKey = "";
   }
 
@@ -137,7 +133,6 @@ class AkceNaPivoCard extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${STYLE}</style>
-      <link rel="stylesheet" href="${LEAFLET_CSS}">
       <ha-card>
         <div class="header">
           <div>
@@ -164,8 +159,12 @@ class AkceNaPivoCard extends HTMLElement {
         this._select(Number(row.dataset.index));
       })
     );
-    this._map = null;
-    if (this._config.show_map) this._drawMap(offers, attrs.location);
+    if (this._config.show_map) this._setupMap();
+  }
+
+  disconnectedCallback() {
+    this._resize?.disconnect();
+    this._resize = null;
   }
 
   _row(o, i, upcoming = false) {
@@ -229,61 +228,141 @@ class AkceNaPivoCard extends HTMLElement {
       })
     );
     const offer = offers[index];
-    if (this._map && offer?.latitude) {
-      this._map.setView([offer.latitude, offer.longitude], 15);
-      this._markers[index]?.openPopup();
-    } else if (!this._map && this._config.show_map) {
-      this._drawMap(offers, attrs.location);
+    if (offer?.latitude != null) {
+      const z = Math.max(this._view?.z || 0, 15);
+      const p = project(offer.latitude, offer.longitude, z);
+      this._view = { z, cx: p.x, cy: p.y };
     }
+    this._drawMap();
   }
 
-  async _drawMap(offers, location) {
+  // ------------------------------------------------------------------ mapa
+  _mapPoints() {
+    const { offers, attrs } = this._offers();
+    const points = offers
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => o.latitude != null && o.longitude != null);
+    const home = attrs.location?.latitude != null ? attrs.location : null;
+    return { points, home };
+  }
+
+  _setupMap() {
     const el = this.shadowRoot.getElementById("map");
     if (!el) return;
-    let L;
-    try {
-      L = await loadLeaflet();
-    } catch (e) {
-      const o = offers[this._selected];
-      if (o?.latitude) {
-        const d = 0.01;
-        el.innerHTML = `<iframe title="mapa" src="https://www.openstreetmap.org/export/embed.html?bbox=${o.longitude - d},${o.latitude - d},${o.longitude + d},${o.latitude + d}&layer=mapnik&marker=${o.latitude},${o.longitude}"></iframe>`;
+    this._resize?.disconnect();
+    this._resize = new ResizeObserver(() => this._drawMap());
+    this._resize.observe(el);
+
+    // posun mapy tažením
+    let drag = null;
+    el.addEventListener("pointerdown", (ev) => {
+      if (ev.target.closest(".pin, .zoom")) return;
+      const v = this._currentView();
+      if (!v) return;
+      drag = { x: ev.clientX, y: ev.clientY, v, moved: false };
+      el.setPointerCapture(ev.pointerId);
+    });
+    el.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.x;
+      const dy = ev.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+      this._view = { z: drag.v.z, cx: drag.v.cx - dx, cy: drag.v.cy - dy };
+      this._drawMap();
+    });
+    const end = () => (drag = null);
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    this._drawMap();
+  }
+
+  // automatický výřez, do kterého se vejdou všechny obchody i domov
+  _fitView(width, height) {
+    const { points, home } = this._mapPoints();
+    const coords = points.map(({ o }) => [o.latitude, o.longitude]);
+    if (home) coords.push([home.latitude, home.longitude]);
+    if (!coords.length) return null;
+    for (let z = 16; z >= 3; z--) {
+      const px = coords.map(([lat, lon]) => project(lat, lon, z));
+      const xs = px.map((p) => p.x);
+      const ys = px.map((p) => p.y);
+      const w = Math.max(...xs) - Math.min(...xs);
+      const h = Math.max(...ys) - Math.min(...ys);
+      if ((w <= width - 60 && h <= height - 60) || z === 3) {
+        return { z, cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2 };
       }
+    }
+    return null;
+  }
+
+  _currentView() {
+    const el = this.shadowRoot.getElementById("map");
+    if (!el) return null;
+    return this._view || this._fitView(el.clientWidth || 400, el.clientHeight || 240);
+  }
+
+  _zoom(delta) {
+    const v = this._currentView();
+    if (!v) return;
+    const z = Math.max(3, Math.min(18, v.z + delta));
+    const f = 2 ** (z - v.z);
+    this._view = { z, cx: v.cx * f, cy: v.cy * f };
+    this._drawMap();
+  }
+
+  _drawMap() {
+    const el = this.shadowRoot.getElementById("map");
+    if (!el) return;
+    const width = el.clientWidth;
+    const height = el.clientHeight;
+    if (!width || !height) return; // karta ještě není vykreslená – překreslí ResizeObserver
+    const v = this._currentView();
+    if (!v) {
+      el.innerHTML = "";
       return;
     }
-    if (!el.isConnected) return;
-    const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
-    this._map = map;
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap",
-    }).addTo(map);
-    const bounds = [];
-    this._markers = [];
-    offers.forEach((o, i) => {
-      if (o.latitude == null) return;
-      const icon = L.divIcon({
-        className: "",
-        html: `<div class="pin ${i === this._selected ? "sel" : ""}">${i + 1}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-      const marker = L.marker([o.latitude, o.longitude], { icon })
-        .addTo(map)
-        .bindPopup(`<b>${i + 1}. ${esc(o.product)}</b><br>${esc(o.shop)} – ${this._money(o.price)}<br>${esc(o.address || "")}`);
-      marker.on("click", () => this._select(i));
-      this._markers[i] = marker;
-      bounds.push([o.latitude, o.longitude]);
-    });
-    if (location?.latitude != null) {
-      L.marker([location.latitude, location.longitude], {
-        icon: L.divIcon({ className: "", html: `<div class="pin home">🏠</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }),
-      }).addTo(map).bindPopup("Vaše poloha");
-      bounds.push([location.latitude, location.longitude]);
+    const left = v.cx - width / 2;
+    const top = v.cy - height / 2;
+    const n = 2 ** v.z;
+    let tiles = "";
+    for (let ty = Math.floor(top / TILE); ty <= Math.floor((top + height) / TILE); ty++) {
+      if (ty < 0 || ty >= n) continue;
+      for (let tx = Math.floor(left / TILE); tx <= Math.floor((left + width) / TILE); tx++) {
+        const x = ((tx % n) + n) % n;
+        const src = TILE_URL.replace("{z}", v.z).replace("{x}", x).replace("{y}", ty);
+        tiles += `<img class="tile" alt="" draggable="false" src="${src}" style="left:${Math.round(tx * TILE - left)}px;top:${Math.round(ty * TILE - top)}px">`;
+      }
     }
-    if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
-    else if (bounds.length === 1) map.setView(bounds[0], 14);
-    setTimeout(() => map.invalidateSize(), 200);
+    const { points, home } = this._mapPoints();
+    const pin = (lat, lon, cls, label, title, index) => {
+      const p = project(lat, lon, v.z);
+      return `<div class="pin ${cls}" ${index != null ? `data-index="${index}"` : ""} title="${esc(title)}" style="left:${Math.round(p.x - left)}px;top:${Math.round(p.y - top)}px">${label}</div>`;
+    };
+    let pins = home ? pin(home.latitude, home.longitude, "home", "🏠", "Vaše poloha") : "";
+    // vybraný obchod kreslíme až nakonec, aby byl nahoře
+    const ordered = [...points].sort((a, b) => (a.i === this._selected) - (b.i === this._selected));
+    for (const { o, i } of ordered) {
+      pins += pin(o.latitude, o.longitude, i === this._selected ? "sel" : "", i + 1, `${i + 1}. ${o.store_name || o.shop} – ${this._money(o.price)}`, i);
+    }
+    el.innerHTML = `
+      <div class="tiles">${tiles}</div>
+      ${pins}
+      <div class="zoom">
+        <button data-zoom="1" title="Přiblížit">+</button>
+        <button data-zoom="-1" title="Oddálit">−</button>
+        <button data-fit="1" title="Ukázat všechny obchody">⤢</button>
+      </div>
+      <div class="attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>`;
+    el.querySelectorAll(".pin[data-index]").forEach((node) =>
+      node.addEventListener("click", () => this._select(Number(node.dataset.index)))
+    );
+    el.querySelectorAll("button[data-zoom]").forEach((b) =>
+      b.addEventListener("click", () => this._zoom(Number(b.dataset.zoom)))
+    );
+    el.querySelector("button[data-fit]")?.addEventListener("click", () => {
+      this._view = null;
+      this._drawMap();
+    });
   }
 }
 
@@ -294,8 +373,16 @@ const STYLE = `
   .sub { color: var(--secondary-text-color); font-size: .8em; margin-top: 2px; }
   .icon-btn { background:none; border:none; cursor:pointer; color: var(--primary-text-color); padding:6px; border-radius:50%; }
   .icon-btn:hover { background: var(--secondary-background-color); }
-  #map { width: 100%; z-index: 0; }
-  #map iframe { width:100%; height:100%; border:0; }
+  #map { position: relative; width: 100%; overflow: hidden; background: #e8e4d8; touch-action: none; cursor: grab; user-select: none; }
+  #map .tiles { position:absolute; inset:0; }
+  #map .tile { position:absolute; width:256px; height:256px; pointer-events:none; }
+  #map .pin { position:absolute; transform: translate(-50%, -50%); cursor: pointer; z-index: 2; }
+  #map .pin.home { cursor: default; background:#1976d2; font-size:14px; }
+  #map .zoom { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; z-index:3; }
+  #map .zoom button { width:30px; height:30px; border:0; border-radius:8px; background: rgba(255,255,255,.92); color:#333;
+         font-size:18px; font-weight:700; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  #map .attribution { position:absolute; right:0; bottom:0; font-size:10px; padding:1px 5px; background: rgba(255,255,255,.8); color:#333; z-index:3; }
+  #map .attribution a { color:#333; }
   .list { padding: 4px 8px 10px; }
   .section { padding: 8px 16px 0; font-weight: 600; color: var(--secondary-text-color); }
   .row { display:flex; gap:10px; align-items:flex-start; padding:10px 8px; border-radius:12px; cursor:pointer; }
@@ -328,7 +415,6 @@ const STYLE = `
          display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); font: 700 13px sans-serif; }
   .pin.sel { background:#2e7d32; transform: scale(1.15); }
   .pin.home { background:#1976d2; font-size:14px; }
-  .leaflet-container { font: inherit; }
 `;
 
 class AkceNaPivoCardEditor extends HTMLElement {
@@ -417,6 +503,6 @@ if (!window.customCards.some((c) => c.type === "akce-na-pivo-card")) {
     name: "Akce na pivo",
     description: "Nejlevnější pivo v akci – seznam obchodů, ceny a mapa.",
     preview: true,
-    documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo",
+    documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo#lovelace-karty-slo%C5%BEka-www",
   });
 }

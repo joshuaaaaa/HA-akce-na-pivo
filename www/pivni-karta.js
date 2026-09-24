@@ -455,6 +455,6 @@ if (!window.customCards.some((c) => c.type === "pivni-karta")) {
     name: "Pivní karta",
     description: "Kam jít pro nejlevnější pivo – obchod, adresa, cena a mapa na pivním pozadí.",
     preview: true,
-    documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo#pivn%C3%AD-karta",
+    documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo#lovelace-karty-slo%C5%BEka-www",
   });
 }
