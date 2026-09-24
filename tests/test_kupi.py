@@ -127,3 +127,27 @@ def test_listing_row_without_product_id_uses_nearest_name():
     """
     offers = parse_offers(html, "https://www.kupi.cz/slevy/pivo", TODAY)
     assert [o["product"] for o in offers] == ["Gambrinus Originál 10"]
+
+
+def test_detect_packaging():
+    from akce_na_pivo.kupi import detect_packaging
+
+    assert detect_packaging("Pilsner Urquell ležák plech 0,5 l") == "can"
+    assert detect_packaging("Kozel 11 plechovka 6 x 0,5 l") == "can"
+    assert detect_packaging("Zlatý Bažant 12% svetlý ležiak plechovka 0,5 l") == "can"
+    assert detect_packaging("Gambrinus 10 vratná láhev 0,5 l") == "glass"
+    assert detect_packaging("Šariš 11 fľaša 0,5 l") == "glass"
+    assert detect_packaging("Radegast 10 PET lahev 1,5 l") == "pet"  # ne sklo kvůli "lahev"
+    assert detect_packaging("Braník 1,5 l", volume=1.5) == "pet"
+    assert detect_packaging("Kozel 11 0,5 l", volume=0.5) is None
+    assert detect_packaging("Albert Supermarket 22. 9.") is None
+
+
+def test_offer_has_packaging():
+    offers = parse_offers(
+        HTML.replace("Pilsner Urquell ležák", "Pilsner Urquell ležák plech"),
+        "https://www.kupi.cz/slevy/pivo",
+        TODAY,
+    )
+    assert offers[0]["packaging"] == "can"
+    assert offers[2]["packaging"] is None  # Birell bez údaje o obalu

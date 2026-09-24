@@ -333,3 +333,55 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     assert where.state == "Kaufland"
     assert "0,69 €" in where.attributes["summary"]
     assert hass.states.get("sensor.pivo_sk_where_to_buy_saris").state == "COOP Jednota"
+
+
+async def test_packaging_filter(hass: HomeAssistant, aioclient_mock, freezer) -> None:
+    """Jen plech – sklo a akce bez údaje o obalu se vyřadí."""
+    freezer.move_to("2026-09-23 10:00:00+02:00")
+    hass.config.latitude, hass.config.longitude = 48.148, 17.107
+    html = (
+        SK_HTML.replace("svetlý ležiak 0,5 l", "svetlý ležiak fľaša 0,5 l")
+        + """
+    <div class="offer"><h3>Zlatý Bažant 10 plechovka 0,5 l</h3><span>Lidl</span>
+      <span class="price">0,79 €</span><span>22.9. - 28.9.</span></div>"""
+    )
+    aioclient_mock.get("https://www.zlacnene.sk/akciovy-tovar/napoje-alkoholicke/pivo/", text=html)
+    aioclient_mock.get(re.compile(r"^https://"), status=404)
+    aioclient_mock.post("https://overpass-api.de/api/interpreter", json=SK_OVERPASS)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Plech", "country": "SK"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "brands": ["Zlatý Bažant", "Šariš"],
+            "packaging": ["can"],
+            "include_unknown_packaging": False,
+            "sources": ["zlacnene"],
+            "update_time": "07:00:00",
+            "update_interval_hours": 0,
+            "top_count": 5,
+            "sort_by": "unit",
+            "max_distance_km": 15,
+            "require_nearby_store": False,
+            "price_alert": 0.7,
+            "include_upcoming": True,
+            "exclude_loyalty": False,
+            "exclude_nonalcoholic": False,
+            "max_pages": 1,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["options"]["packaging"] == ["can"]
+    await hass.async_block_till_done()
+
+    offers = hass.states.get("sensor.plech_cheapest_beer").attributes["offers"]
+    assert [(o["product"], o["packaging"]) for o in offers] == [
+        ("Zlatý Bažant 10 plechovka 0,5 l", "can")
+    ]
+    count = [s for s in hass.states.async_all("sensor") if "filter" in s.attributes][0]
+    assert count.attributes["filter"]["packaging_excluded"] == 2

@@ -12,7 +12,7 @@
  *   3. do dashboardu přidejte kartu "Pivní karta" (type: custom:pivni-karta)
  */
 
-const PIVNI_KARTA_VERSION = "1.0.0";
+const PIVNI_KARTA_VERSION = "1.1.0";
 
 console.info(
   `%c 🍺 PIVNI-KARTA %c v${PIVNI_KARTA_VERSION} `,
@@ -22,6 +22,11 @@ console.info(
 
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const ALL = "__all__";
+const PACKAGING = {
+  glass: { icon: "🍾", label: "Sklo" },
+  can: { icon: "🥫", label: "Plech" },
+  pet: { icon: "🧴", label: "PET" },
+};
 
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -45,6 +50,7 @@ class PivniKarta extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._brand = null;
+    this._packaging = null;
     this._lastKey = "";
   }
 
@@ -67,11 +73,13 @@ class PivniKarta extends HTMLElement {
       show_map: true,
       show_list: true,
       show_brands: true,
+      show_packaging: true,
       bubbles: true,
       map_height: 180,
       ...config,
     };
     this._brand = this._config.brand || null;
+    this._packaging = this._config.packaging || null;
     this._lastKey = "";
     if (this._hass) this._render();
   }
@@ -99,14 +107,16 @@ class PivniKarta extends HTMLElement {
   }
 
   _selection(attrs) {
-    const offers = attrs.offers || [];
-    const brands = attrs.brands || {};
-    if (this._brand && this._brand !== ALL) {
-      const list = offers.filter((o) => o.brand === this._brand);
-      const best = brands[this._brand] || list[0] || null;
-      return { best, list: list.length ? list : best ? [best] : [] };
-    }
-    return { best: offers[0] || null, list: offers };
+    const brand = this._brand && this._brand !== ALL ? this._brand : null;
+    const pack = this._packaging && this._packaging !== ALL ? this._packaging : null;
+    const list = (attrs.offers || []).filter(
+      (o) => (!brand || o.brand === brand) && (!pack || o.packaging === pack)
+    );
+    // nabídka mimo zobrazený seznam (nejlevnější pro značku / obal) z atributů senzoru
+    let best = list[0] || null;
+    if (!best && brand && !pack) best = (attrs.brands || {})[brand] || null;
+    if (!best && pack && !brand) best = (attrs.packaging_best || {})[pack] || null;
+    return { best, list: list.length ? list : best ? [best] : [] };
   }
 
   _render() {
@@ -120,6 +130,9 @@ class PivniKarta extends HTMLElement {
     const symbol = attrs.currency_symbol || "Kč";
     const { best, list } = this._selection(attrs);
     const brandNames = Object.keys(attrs.brands || {});
+    const packKinds = Object.keys(PACKAGING).filter(
+      (k) => (attrs.packaging_best || {})[k] || (attrs.offers || []).some((o) => o.packaging === k)
+    );
     const count = Math.max(1, Number(this._config.count) || 5);
     const updated = attrs.updated ? new Date(attrs.updated) : null;
 
@@ -148,8 +161,13 @@ class PivniKarta extends HTMLElement {
               <button class="chip ${!this._brand || this._brand === ALL ? "on" : ""}" data-brand="${ALL}">Vše</button>
               ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""}" data-brand="${esc(b)}">${esc(b)}</button>`).join("")}
             </div>` : ""}
+          ${this._config.show_packaging && packKinds.length ? `
+            <div class="brands packs" role="tablist">
+              <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">Každý obal</button>
+              ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${PACKAGING[k].label}</button>`).join("")}
+            </div>` : ""}
 
-          ${best ? this._hero(best, symbol) : `<div class="empty">Na ${this._brand && this._brand !== ALL ? esc(this._brand) : "vybrané pivo"} teď žádná akce není 😢</div>`}
+          ${best ? this._hero(best, symbol) : `<div class="empty">Na ${this._brand && this._brand !== ALL ? esc(this._brand) : "vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""} teď žádná akce není 😢</div>`}
 
           ${best && this._config.show_map && best.latitude != null ? this._map(best) : ""}
 
@@ -164,7 +182,8 @@ class PivniKarta extends HTMLElement {
     );
     this.shadowRoot.querySelectorAll(".brands .chip").forEach((chip) =>
       chip.addEventListener("click", () => {
-        this._brand = chip.dataset.brand;
+        if (chip.dataset.brand) this._brand = chip.dataset.brand;
+        if (chip.dataset.pack) this._packaging = chip.dataset.pack;
         this._render();
       })
     );
@@ -191,7 +210,7 @@ class PivniKarta extends HTMLElement {
             ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy">` : `<div class="mug">🍺</div>`}
             <div>
               <div class="pname">${esc(o.product)}</div>
-              <div class="pmeta">${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? " · jen s kartou" : ""}</div>
+              <div class="pmeta">${PACKAGING[o.packaging] ? `${PACKAGING[o.packaging].icon} ${PACKAGING[o.packaging].label} · ` : ""}${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? " · jen s kartou" : ""}</div>
             </div>
           </div>
           <div class="price">
@@ -281,6 +300,7 @@ const STYLE = `
   .content { position:relative; z-index:1; padding: 18px 14px 14px; }
 
   .brands { display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; }
+  .brands.packs { margin-top: -4px; }
   .chip {
     border:0; cursor:pointer; font: inherit; font-size:.82em; font-weight:600;
     padding: 5px 11px; border-radius: 999px; color:#5a3000;
@@ -382,6 +402,18 @@ class PivniKartaEditor extends HTMLElement {
         },
       },
       {
+        name: "packaging",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "", label: "Každý obal" },
+              ...Object.entries(PACKAGING).map(([value, p]) => ({ value, label: `${p.icon} ${p.label}` })),
+            ],
+          },
+        },
+      },
+      {
         type: "grid",
         name: "",
         schema: [
@@ -390,11 +422,12 @@ class PivniKartaEditor extends HTMLElement {
           { name: "show_map", selector: { boolean: {} } },
           { name: "show_list", selector: { boolean: {} } },
           { name: "show_brands", selector: { boolean: {} } },
+          { name: "show_packaging", selector: { boolean: {} } },
           { name: "bubbles", selector: { boolean: {} } },
         ],
       },
     ];
-    this._form.data = { title: "Kam na pivo", count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, bubbles: true, ...this._config };
+    this._form.data = { title: "Kam na pivo", count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, show_packaging: true, bubbles: true, ...this._config };
   }
 }
 
@@ -407,6 +440,8 @@ const EDITOR_LABELS = {
   show_map: "Mapa obchodu",
   show_list: "Žebříček nejlevnějších",
   show_brands: "Přepínač značek",
+  packaging: "Výchozí obal",
+  show_packaging: "Přepínač obalu (sklo / plech / PET)",
   bubbles: "Bublinky 🫧",
 };
 

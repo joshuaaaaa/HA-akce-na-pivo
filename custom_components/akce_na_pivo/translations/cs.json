@@ -14,6 +14,8 @@
         "description": "Vyberte značky piva (nebo napište vlastní a potvrďte Enterem), weby s akcemi, odkud počítat vzdálenost a kdy akce kontrolovat. Pobočky se hledají v OpenStreetMap jen v zemi {country}.",
         "data": {
           "brands": "Značky piva",
+          "packaging": "Obal piva",
+          "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
@@ -30,7 +32,9 @@
           "max_pages": "Max. počet stránek kupi.cz ke stažení"
         },
         "data_description": {
-          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README."
+          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
+          "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
+          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený."
         }
       }
     },
@@ -44,6 +48,8 @@
         "title": "Akce na pivo – nastavení ({country})",
         "data": {
           "brands": "Značky piva",
+          "packaging": "Obal piva",
+          "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
@@ -60,7 +66,9 @@
           "max_pages": "Max. počet stránek kupi.cz ke stažení"
         },
         "data_description": {
-          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README."
+          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
+          "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
+          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený."
         }
       }
     },
@@ -74,6 +82,13 @@
         "unit": "Cena za 0,5 l (nejvýhodnější)",
         "price": "Cena za balení",
         "distance": "Nejbližší obchod"
+      }
+    },
+    "packaging": {
+      "options": {
+        "glass": "🍾 Sklo (láhev)",
+        "can": "🥫 Plech (plechovka)",
+        "pet": "🧴 PET láhev"
       }
     }
   },

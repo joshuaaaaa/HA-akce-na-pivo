@@ -16,6 +16,9 @@ from .coordinator import BeerDealsCoordinator
 from .entity import BeerEntity, offer_attributes
 
 
+CARD_OFFERS = 15
+
+
 class CurrencyUnit:
     """Jednotka podle zvolené země – CZK nebo EUR."""
 
@@ -51,7 +54,9 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
     _attr_icon = "mdi:beer"
     _attr_translation_key = "cheapest"
     _attr_suggested_display_precision = 2
-    _unrecorded_attributes = frozenset({"offers", "upcoming", "brands", "location"})
+    _unrecorded_attributes = frozenset(
+        {"offers", "upcoming", "brands", "packaging_best", "location"}
+    )
 
     def __init__(self, coordinator: BeerDealsCoordinator) -> None:
         super().__init__(coordinator, "cheapest")
@@ -80,9 +85,16 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
                 if data.get("sort_by") == SORT_PRICE
                 else "cena za 0,5 l",
                 "sort_by": data.get("sort_by"),
-                "offers": [offer_attributes(o) for o in data.get("top", [])],
+                # víc nabídek než TOP N, aby karty mohly filtrovat podle značky a obalu
+                "offers": [
+                    offer_attributes(o)
+                    for o in data.get("offers", [])[: max(data.get("top_count", 5), CARD_OFFERS)]
+                ],
                 "upcoming": [offer_attributes(o) for o in data.get("upcoming", [])],
                 "brands": {b: offer_attributes(o) for b, o in (data.get("brands") or {}).items()},
+                "packaging_best": {
+                    k: offer_attributes(o) for k, o in (data.get("packaging_best") or {}).items()
+                },
                 "location": data.get("location"),
                 "updated": data.get("updated"),
                 "total_found": data.get("total_found"),

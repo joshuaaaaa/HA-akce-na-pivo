@@ -247,6 +247,7 @@ def _make(
     loyalty: bool = False,
     url: str = "",
     image: str = "",
+    packaging_hint: str = "",
 ) -> dict[str, Any]:
     if validity and not (valid_from or valid_to):
         valid_from, valid_to = parse_validity(validity, today)
@@ -270,6 +271,7 @@ def _make(
         source=source,
         old_price=old_price,
         currency=COUNTRIES[country]["currency"],
+        packaging_hint=packaging_hint,
     )
 
 
@@ -551,6 +553,7 @@ def parse_html_cards(
                 amount=amount_match.group(0) if amount_match else "",
                 validity=validity_match.group(0) if validity_match else "",
                 loyalty=any(word in norm for word in LOYALTY_WORDS),
+                packaging_hint=text,
                 url=link["href"] if link else "",
                 image=str(img.get("data-src") or img.get("src") or "") if img else "",
             )

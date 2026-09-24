@@ -34,6 +34,7 @@ OFFER_ATTRS = (
     "valid_to",
     "loyalty",
     "nonalcoholic",
+    "packaging",
     "upcoming",
     "flags",
     "store_name",

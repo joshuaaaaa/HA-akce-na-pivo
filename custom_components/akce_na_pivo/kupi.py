@@ -177,6 +177,29 @@ def is_nonalcoholic(name: str | None) -> bool:
     return bool(re.search(r"(?<![\d,.])0[,.]0\s*%", norm))
 
 
+# Obal podle textu (bez diakritiky). Pořadí je důležité: "PET lahev" je PET, ne sklo.
+_PACKAGING_PATTERNS = (
+    ("can", re.compile(r"\bplech|\bcan\b|\bcans\b|\bdoza\b|\bdose\b")),
+    ("pet", re.compile(r"\bpet\b|\bplast")),
+    ("glass", re.compile(r"\bsklo|\bsklen[eay]n|\blahe?v|\blahv|\bflas|\bbottle|\bvratn")),
+)
+
+
+def detect_packaging(*texts: str | None, volume: float | None = None) -> str | None:
+    """Vrátí "can" / "glass" / "pet", nebo None, když obal z textu nejde poznat."""
+    for text in texts:
+        norm = normalize(text)
+        if not norm:
+            continue
+        for kind, pattern in _PACKAGING_PATTERNS:
+            if pattern.search(norm):
+                return kind
+    # pivo v balení od 1 l se v obchodech prodává v PET lahvích
+    if volume and volume >= 1.0:
+        return "pet"
+    return None
+
+
 def brand_aliases(brand: str) -> tuple[str, ...]:
     if brand in KNOWN_BRANDS:
         return KNOWN_BRANDS[brand][0]
@@ -307,6 +330,7 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
                 valid_from=valid_from,
                 valid_to=valid_to,
                 loyalty=loyalty,
+                packaging_hint=row_text,
                 url=urljoin(KUPI_BASE_URL, link["href"])
                 if link
                 else (product.get("url") or source_url),
@@ -335,6 +359,7 @@ def build_offer(
     source: str = "kupi",
     old_price: float | None = None,
     currency: str = "CZK",
+    packaging_hint: str = "",
 ) -> dict[str, Any]:
     pieces, volume = parse_volume(amount, name)
     per_liter = parse_unit_price(unit_text)
@@ -377,6 +402,7 @@ def build_offer(
         "valid_to": valid_to.isoformat() if valid_to else None,
         "loyalty": loyalty,
         "nonalcoholic": is_nonalcoholic(name),
+        "packaging": detect_packaging(name, amount, packaging_hint, volume=volume),
         "url": url,
         "image": image,
     }

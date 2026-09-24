@@ -17,10 +17,12 @@ from .const import (
     CONF_CUSTOM_URLS,
     CONF_EXCLUDE_LOYALTY,
     CONF_EXCLUDE_NONALCOHOLIC,
+    CONF_INCLUDE_UNKNOWN_PACKAGING,
     CONF_INCLUDE_UPCOMING,
     CONF_LOCATION_ENTITY,
     CONF_MAX_DISTANCE_KM,
     CONF_MAX_PAGES,
+    CONF_PACKAGING,
     CONF_PRICE_ALERT,
     CONF_REQUIRE_NEARBY_STORE,
     CONF_SORT_BY,
@@ -32,9 +34,11 @@ from .const import (
     DEFAULT_COUNTRY,
     DEFAULT_EXCLUDE_LOYALTY,
     DEFAULT_EXCLUDE_NONALCOHOLIC,
+    DEFAULT_INCLUDE_UNKNOWN_PACKAGING,
     DEFAULT_INCLUDE_UPCOMING,
     DEFAULT_MAX_DISTANCE_KM,
     DEFAULT_MAX_PAGES,
+    DEFAULT_PACKAGING,
     DEFAULT_REQUIRE_NEARBY_STORE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
@@ -44,6 +48,7 @@ from .const import (
     KNOWN_BRANDS,
     MAX_TOP_COUNT,
     NAME,
+    PACKAGING_OPTIONS,
     SORT_OPTIONS,
     SOURCES,
     country_sources,
@@ -96,6 +101,22 @@ def _schema(values: dict[str, Any], country: str) -> vol.Schema:
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
+            vol.Required(
+                CONF_PACKAGING, default=values.get(CONF_PACKAGING, DEFAULT_PACKAGING)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=PACKAGING_OPTIONS,
+                    multiple=True,
+                    translation_key=CONF_PACKAGING,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            ),
+            vol.Required(
+                CONF_INCLUDE_UNKNOWN_PACKAGING,
+                default=values.get(
+                    CONF_INCLUDE_UNKNOWN_PACKAGING, DEFAULT_INCLUDE_UNKNOWN_PACKAGING
+                ),
+            ): selector.BooleanSelector(),
             vol.Required(
                 CONF_SOURCES,
                 default=[s for s in values.get(CONF_SOURCES, sources) if s in sources] or sources,
@@ -210,6 +231,9 @@ def _clean(user_input: dict[str, Any], country: str) -> dict[str, Any]:
     for key in (CONF_UPDATE_INTERVAL_HOURS, CONF_TOP_COUNT, CONF_MAX_PAGES):
         if key in data:
             data[key] = int(data[key])
+    data[CONF_PACKAGING] = [p for p in data.get(CONF_PACKAGING) or [] if p in PACKAGING_OPTIONS]
+    if not data[CONF_PACKAGING]:
+        data[CONF_PACKAGING] = list(PACKAGING_OPTIONS)
     allowed = country_sources(country)
     data[CONF_SOURCES] = [s for s in data.get(CONF_SOURCES) or [] if s in allowed]
     if not data[CONF_SOURCES] and not data.get(CONF_CUSTOM_URLS):
