@@ -24,8 +24,10 @@ from .const import (
     CONF_BRANDS,
     CONF_COUNTRY,
     CONF_CUSTOM_URLS,
+    CONF_DEGREES,
     CONF_EXCLUDE_LOYALTY,
     CONF_EXCLUDE_NONALCOHOLIC,
+    CONF_INCLUDE_UNKNOWN_DEGREE,
     CONF_INCLUDE_UNKNOWN_PACKAGING,
     CONF_INCLUDE_UPCOMING,
     CONF_LOCATION_ENTITY,
@@ -39,8 +41,10 @@ from .const import (
     CONF_TOP_COUNT,
     COUNTRIES,
     DEFAULT_COUNTRY,
+    DEFAULT_DEGREES,
     DEFAULT_EXCLUDE_LOYALTY,
     DEFAULT_EXCLUDE_NONALCOHOLIC,
+    DEFAULT_INCLUDE_UNKNOWN_DEGREE,
     DEFAULT_INCLUDE_UNKNOWN_PACKAGING,
     DEFAULT_INCLUDE_UPCOMING,
     DEFAULT_MAX_DISTANCE_KM,
@@ -49,6 +53,7 @@ from .const import (
     DEFAULT_REQUIRE_NEARBY_STORE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
+    DEGREE_OPTIONS,
     DOMAIN,
     EVENT_CHEAP_BEER,
     HISTORY_DAYS,
@@ -67,7 +72,7 @@ from .const import (
     country_sources,
 )
 from .generic import dedupe, parse_generic
-from .kupi import kupi_html_sample, match_brand, normalize, parse_offers
+from .kupi import degree_group, kupi_html_sample, match_brand, normalize, parse_offers
 from .stores import (
     fetch_stores,
     haversine_km,
@@ -472,6 +477,11 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.opt(CONF_INCLUDE_UNKNOWN_PACKAGING, DEFAULT_INCLUDE_UNKNOWN_PACKAGING)
         )
         all_packaging = packaging >= set(PACKAGING_OPTIONS) and include_unknown
+        degrees = set(self.opt(CONF_DEGREES, DEFAULT_DEGREES)) or set(DEFAULT_DEGREES)
+        include_unknown_degree = bool(
+            self.opt(CONF_INCLUDE_UNKNOWN_DEGREE, DEFAULT_INCLUDE_UNKNOWN_DEGREE)
+        )
+        all_degrees = degrees >= set(DEGREE_OPTIONS) and include_unknown_degree
         result = []
         stats = {
             "downloaded": len(offers),
@@ -481,6 +491,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "loyalty_excluded": 0,
             "nonalcoholic_excluded": 0,
             "packaging_excluded": 0,
+            "degree_excluded": 0,
         }
         for offer in offers:
             brand = (
@@ -510,6 +521,10 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             kind = offer.get("packaging")
             if not all_packaging and (kind not in packaging if kind else not include_unknown):
                 stats["packaging_excluded"] += 1
+                continue
+            group = degree_group(offer.get("degree"))
+            if not all_degrees and (group not in degrees if group else not include_unknown_degree):
+                stats["degree_excluded"] += 1
                 continue
             result.append({**offer, "brand": brand, "upcoming": upcoming})
         stats["matching"] = len(result)
@@ -644,10 +659,13 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         brands: dict[str, dict[str, Any]] = {}
         packaging: dict[str, dict[str, Any]] = {}
+        degree_best: dict[str, dict[str, Any]] = {}
         for offer in current:
             brands.setdefault(offer["brand"], offer)
             if offer.get("packaging"):
                 packaging.setdefault(offer["packaging"], offer)
+            if group := degree_group(offer.get("degree")):
+                degree_best.setdefault(group, offer)
 
         for rank, offer in enumerate(current, start=1):
             offer["rank"] = rank
@@ -660,6 +678,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # vybrané značky, na které teď žádná akce není
             "not_on_sale": [b for b in self.brands if b != ALL_BRANDS and b not in brands],
             "packaging_best": packaging,
+            "degree_best": degree_best,
             "location": {"latitude": lat, "longitude": lon, "source": source},
             "sort_by": sort_by,
             "top_count": top_count,

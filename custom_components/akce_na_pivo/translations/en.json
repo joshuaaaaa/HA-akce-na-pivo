@@ -16,6 +16,8 @@
           "brands": "Beer brands",
           "packaging": "Beer packaging",
           "include_unknown_packaging": "Include deals with unknown packaging",
+          "degrees": "Beer strength (Plato degrees)",
+          "include_unknown_degree": "Include deals with unknown degree",
           "sources": "Deal sources",
           "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
@@ -34,7 +36,9 @@
         "data_description": {
           "custom_urls": "Optional. The URL may contain the placeholder query (searched brand) or slug (brand like pilsner-urquell) wrapped in curly braces – see the README for examples.",
           "packaging": "Packaging is detected from the deal name (can, bottle, glass, PET…). Beer of 1 l or more is treated as PET.",
-          "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated."
+          "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated.",
+          "degrees": "Detected from the deal name (Kozel 11, 12°, 12%…). Well-known beers without a number are filled in, e.g. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "When off, only deals with a known degree are shown."
         }
       }
     },
@@ -50,6 +54,8 @@
           "brands": "Beer brands",
           "packaging": "Beer packaging",
           "include_unknown_packaging": "Include deals with unknown packaging",
+          "degrees": "Beer strength (Plato degrees)",
+          "include_unknown_degree": "Include deals with unknown degree",
           "sources": "Deal sources",
           "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
@@ -68,7 +74,9 @@
         "data_description": {
           "custom_urls": "Optional. The URL may contain the placeholder query (searched brand) or slug (brand like pilsner-urquell) wrapped in curly braces – see the README for examples.",
           "packaging": "Packaging is detected from the deal name (can, bottle, glass, PET…). Beer of 1 l or more is treated as PET.",
-          "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated."
+          "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated.",
+          "degrees": "Detected from the deal name (Kozel 11, 12°, 12%…). Well-known beers without a number are filled in, e.g. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "When off, only deals with a known degree are shown."
         }
       }
     },
@@ -89,6 +97,14 @@
         "glass": "🍾 Glass bottle",
         "can": "🥫 Can",
         "pet": "🧴 PET bottle"
+      }
+    },
+    "degrees": {
+      "options": {
+        "10": "10°",
+        "11": "11°",
+        "12": "12°",
+        "other": "Other (7–9°, specials 13°+)"
       }
     }
   },

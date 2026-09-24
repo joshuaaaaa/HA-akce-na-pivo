@@ -12,7 +12,7 @@
  *   3. do dashboardu přidejte kartu "Pivní karta" (type: custom:pivni-karta)
  */
 
-const PIVNI_KARTA_VERSION = "1.2.0";
+const PIVNI_KARTA_VERSION = "1.3.0";
 
 console.info(
   `%c 🍺 PIVNI-KARTA %c v${PIVNI_KARTA_VERSION} `,
@@ -22,6 +22,8 @@ console.info(
 
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const ALL = "__all__";
+const DEGREES = { "10": "10°", "11": "11°", "12": "12°", other: "Ostatní" };
+const degreeGroup = (d) => (d == null ? null : [10, 11, 12].includes(Number(d)) ? String(d) : "other");
 const PACKAGING = {
   glass: { icon: "🍾", label: "Sklo" },
   can: { icon: "🥫", label: "Plech" },
@@ -51,6 +53,7 @@ class PivniKarta extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._brand = null;
     this._packaging = null;
+    this._degree = null;
     this._lastKey = "";
   }
 
@@ -74,12 +77,14 @@ class PivniKarta extends HTMLElement {
       show_list: true,
       show_brands: true,
       show_packaging: true,
+      show_degrees: true,
       bubbles: true,
       map_height: 180,
       ...config,
     };
     this._brand = this._config.brand || null;
     this._packaging = this._config.packaging || null;
+    this._degree = this._config.degree ? String(this._config.degree) : null;
     this._lastKey = "";
     if (this._hass) this._render();
   }
@@ -109,13 +114,15 @@ class PivniKarta extends HTMLElement {
   _selection(attrs) {
     const brand = this._brand && this._brand !== ALL ? this._brand : null;
     const pack = this._packaging && this._packaging !== ALL ? this._packaging : null;
+    const deg = this._degree && this._degree !== ALL ? this._degree : null;
     const list = (attrs.offers || []).filter(
-      (o) => (!brand || o.brand === brand) && (!pack || o.packaging === pack)
+      (o) => (!brand || o.brand === brand) && (!pack || o.packaging === pack) && (!deg || degreeGroup(o.degree) === deg)
     );
     // nabídka mimo zobrazený seznam (nejlevnější pro značku / obal) z atributů senzoru
     let best = list[0] || null;
-    if (!best && brand && !pack) best = (attrs.brands || {})[brand] || null;
-    if (!best && pack && !brand) best = (attrs.packaging_best || {})[pack] || null;
+    if (!best && brand && !pack && !deg) best = (attrs.brands || {})[brand] || null;
+    if (!best && pack && !brand && !deg) best = (attrs.packaging_best || {})[pack] || null;
+    if (!best && deg && !brand && !pack) best = (attrs.degree_best || {})[deg] || null;
     return { best, list: list.length ? list : best ? [best] : [] };
   }
 
@@ -131,6 +138,9 @@ class PivniKarta extends HTMLElement {
     const { best, list } = this._selection(attrs);
     const notOnSale = attrs.not_on_sale || [];
     const brandNames = [...Object.keys(attrs.brands || {}), ...notOnSale.filter((b) => !(attrs.brands || {})[b])];
+    const degKinds = Object.keys(DEGREES).filter(
+      (k) => (attrs.degree_best || {})[k] || (attrs.offers || []).some((o) => degreeGroup(o.degree) === k)
+    );
     const packKinds = Object.keys(PACKAGING).filter(
       (k) => (attrs.packaging_best || {})[k] || (attrs.offers || []).some((o) => o.packaging === k)
     );
@@ -168,8 +178,13 @@ class PivniKarta extends HTMLElement {
               <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">Každý obal</button>
               ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${PACKAGING[k].label}</button>`).join("")}
             </div>` : ""}
+          ${this._config.show_degrees && degKinds.length ? `
+            <div class="brands packs" role="tablist">
+              <button class="chip ${!this._degree || this._degree === ALL ? "on" : ""}" data-deg="${ALL}">Každý stupeň</button>
+              ${degKinds.map((k) => `<button class="chip ${this._degree === k ? "on" : ""}" data-deg="${k}">${DEGREES[k]}</button>`).join("")}
+            </div>` : ""}
 
-          ${best ? this._hero(best, symbol) : `<div class="hero nosale-hero"><div class="go">Bohužel</div><div class="shop">${this._brand && this._brand !== ALL ? esc(this._brand) : "Vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""}</div><div class="where">teď není v akci 😢</div></div>`}
+          ${best ? this._hero(best, symbol) : `<div class="hero nosale-hero"><div class="go">Bohužel</div><div class="shop">${this._brand && this._brand !== ALL ? esc(this._brand) : "Vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""}${this._degree && this._degree !== ALL ? ` ${DEGREES[this._degree] || ""}` : ""}</div><div class="where">teď není v akci 😢</div></div>`}
 
           ${best && this._config.show_map && best.latitude != null ? this._map(best) : ""}
 
@@ -186,6 +201,7 @@ class PivniKarta extends HTMLElement {
       chip.addEventListener("click", () => {
         if (chip.dataset.brand) this._brand = chip.dataset.brand;
         if (chip.dataset.pack) this._packaging = chip.dataset.pack;
+        if (chip.dataset.deg) this._degree = chip.dataset.deg;
         this._render();
       })
     );
@@ -212,7 +228,7 @@ class PivniKarta extends HTMLElement {
             ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy">` : `<div class="mug">🍺</div>`}
             <div>
               <div class="pname">${esc(o.product)}</div>
-              <div class="pmeta">${PACKAGING[o.packaging] ? `${PACKAGING[o.packaging].icon} ${PACKAGING[o.packaging].label} · ` : ""}${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? " · jen s kartou" : ""}</div>
+              <div class="pmeta">${o.degree ? `<b>${Number(o.degree)}°</b> · ` : ""}${PACKAGING[o.packaging] ? `${PACKAGING[o.packaging].icon} ${PACKAGING[o.packaging].label} · ` : ""}${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? " · jen s kartou" : ""}</div>
             </div>
           </div>
           <div class="price">
@@ -408,6 +424,15 @@ class PivniKartaEditor extends HTMLElement {
         },
       },
       {
+        name: "degree",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [{ value: "", label: "Každý stupeň" }, ...Object.entries(DEGREES).map(([value, label]) => ({ value, label }))],
+          },
+        },
+      },
+      {
         name: "packaging",
         selector: {
           select: {
@@ -429,11 +454,12 @@ class PivniKartaEditor extends HTMLElement {
           { name: "show_list", selector: { boolean: {} } },
           { name: "show_brands", selector: { boolean: {} } },
           { name: "show_packaging", selector: { boolean: {} } },
+          { name: "show_degrees", selector: { boolean: {} } },
           { name: "bubbles", selector: { boolean: {} } },
         ],
       },
     ];
-    this._form.data = { title: "Kam na pivo", count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, show_packaging: true, bubbles: true, ...this._config };
+    this._form.data = { title: "Kam na pivo", count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, show_packaging: true, show_degrees: true, bubbles: true, ...this._config };
   }
 }
 
@@ -448,6 +474,8 @@ const EDITOR_LABELS = {
   show_brands: "Přepínač značek",
   packaging: "Výchozí obal",
   show_packaging: "Přepínač obalu (sklo / plech / PET)",
+  degree: "Výchozí stupeň",
+  show_degrees: "Přepínač stupně (10° / 11° / 12°)",
   bubbles: "Bublinky 🫧",
 };
 

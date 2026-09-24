@@ -383,3 +383,51 @@ async def test_packaging_filter(hass: HomeAssistant, aioclient_mock, freezer) ->
     ]
     count = [s for s in hass.states.async_all("sensor") if "filter" in s.attributes][0]
     assert count.attributes["filter"]["packaging_excluded"] == 2
+
+
+async def test_degree_filter(hass: HomeAssistant, aioclient_mock, freezer) -> None:
+    """Jen dvanáctky: Zlatý Bažant 12% zůstane, Šariš 10 se vyřadí."""
+    freezer.move_to("2026-09-23 10:00:00+02:00")
+    hass.config.latitude, hass.config.longitude = 48.148, 17.107
+    aioclient_mock.get(
+        "https://www.zlacnene.sk/akciovy-tovar/napoje-alkoholicke/pivo/", text=SK_HTML
+    )
+    aioclient_mock.get(re.compile(r"^https://"), status=404)
+    aioclient_mock.post("https://overpass-api.de/api/interpreter", json=SK_OVERPASS)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Dvanactka", "country": "SK"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "brands": ["Zlatý Bažant", "Šariš"],
+            "degrees": ["12"],
+            "include_unknown_degree": False,
+            "sources": ["zlacnene"],
+            "update_time": "07:00:00",
+            "update_interval_hours": 0,
+            "top_count": 5,
+            "sort_by": "unit",
+            "max_distance_km": 15,
+            "require_nearby_store": False,
+            "price_alert": 0.7,
+            "include_upcoming": True,
+            "exclude_loyalty": False,
+            "exclude_nonalcoholic": False,
+            "max_pages": 1,
+        },
+    )
+    assert result["options"]["degrees"] == ["12"]
+    await hass.async_block_till_done()
+
+    cheapest = hass.states.get("sensor.dvanactka_cheapest_beer")
+    assert [(o["product"], o["degree"]) for o in cheapest.attributes["offers"]] == [
+        ("Zlatý Bažant 12% svetlý ležiak 0,5 l", 12)
+    ]
+    assert cheapest.attributes["not_on_sale"] == ["Šariš"]
+    count = [s for s in hass.states.async_all("sensor") if "filter" in s.attributes][0]
+    assert count.attributes["filter"]["degree_excluded"] == 1

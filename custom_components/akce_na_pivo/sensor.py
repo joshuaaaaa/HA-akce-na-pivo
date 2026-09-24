@@ -54,7 +54,7 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
     _attr_translation_key = "cheapest"
     _attr_suggested_display_precision = 2
     _unrecorded_attributes = frozenset(
-        {"offers", "upcoming", "brands", "packaging_best", "location"}
+        {"offers", "upcoming", "brands", "packaging_best", "degree_best", "location"}
     )
 
     def __init__(self, coordinator: BeerDealsCoordinator) -> None:
@@ -93,6 +93,9 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
                 "brands": {b: offer_attributes(o) for b, o in (data.get("brands") or {}).items()},
                 "packaging_best": {
                     k: offer_attributes(o) for k, o in (data.get("packaging_best") or {}).items()
+                },
+                "degree_best": {
+                    k: offer_attributes(o) for k, o in (data.get("degree_best") or {}).items()
                 },
                 "location": data.get("location"),
                 "updated": data.get("updated"),

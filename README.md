@@ -85,6 +85,7 @@ https://www.nejaky-web.cz/hledat?q={query}
 |---|---|
 | Výběr značek | Výběr ze seznamu (Pilsner Urquell, Kozel, Gambrinus, Radegast, Staropramen, Budvar, Bernard, Svijany…), **vlastní značka** (napište ji a potvrďte Enterem, jde zadat i víc značek oddělených čárkou), nebo **„Všechna piva v akci“** |
 | Sklo, nebo plech | Vyberete obal: **🍾 sklo**, **🥫 plech**, **🧴 PET** (libovolná kombinace). Obal se pozná z názvu akce („plech“, „plechovka“, „lahev“, „sklo“, „fľaša“, „PET“…), pivo od 1 l se bere jako PET. Letáky obal často neuvádějí, proto volba **„Zahrnout akce, u kterých obal nejde poznat“** (výchozí zapnuto). Když ji vypnete, uvidíte jen akce s jistě uvedeným obalem. |
+| 10°, 11°, nebo 12° | Vyberete **stupňovitost**: 10° (desítka), 11° (jedenáctka), 12° (dvanáctka) a/nebo **ostatní** (výčepní 7–9°, speciály 13° a víc). Stupeň se pozná z názvu akce („Kozel 11“, „12°“, slovenské „12%“, „desítka“, „výčepní“). U známých piv bez čísla v názvu se doplní (Pilsner Urquell = 12°, Gambrinus Originál = 10°, Radegast Rázná = 10°…). Volba **„Zahrnout akce, u kterých stupeň nejde poznat“** (výchozí zapnuto) rozhodne, co s ostatními akcemi. |
 | Čas kontroly | Denní kontrola v zadaný čas, volitelně navíc každých N hodin. Kdykoli ručně: tlačítko **Aktualizovat akce** nebo služba `akce_na_pivo.refresh` |
 | Poloha | Domov HA, nebo entita `person` / `device_tracker` / `zone` (GPS telefonu). Když se posunete o víc než 2 km, nejbližší pobočky se přepočítají |
 | TOP N | Počet zobrazených nejlevnějších nabídek volíte v nastavení (1–10, výchozí 5) |
@@ -98,7 +99,7 @@ https://www.nejaky-web.cz/hledat?q={query}
 - **Sleva ≥ 30 %** a odhad původní ceny.
 - **Pod limitem**: nastavíte si cenu za 0,5 l a dostanete událost `akce_na_pivo_levne_pivo` a zapne se binární senzor.
 - **Končí dnes / zítra**, **Platí od…** (připravované akce z nových letáků), **Jen s věrnostní kartou** (Lidl Plus, Clubcard, Můj Albert…), **Multipack**.
-- Filtry: obal (sklo / plech / PET), vynechat nealko, vynechat akce jen s kartou, zobrazit jen obchody s pobočkou v okolí (limit km).
+- Filtry: stupňovitost (10° / 11° / 12° / ostatní), obal (sklo / plech / PET), vynechat nealko, vynechat akce jen s kartou, zobrazit jen obchody s pobočkou v okolí (limit km).
 
 ## Instalace integrace
 
@@ -159,6 +160,7 @@ např. `/local/pivni-karta.js?v=4`, aby prohlížeč nenačítal starou verzi z 
   Vybrané značky, na které teď akce není, jsou přeškrtnuté a karta u nich napíše **„teď není v akci“**.
   Ostatní značky se zobrazují normálně.
 - **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“,
+- **přepínač stupně** (Každý stupeň / 10° / 11° / 12°): třeba „kam pro dvanáctku“,
 - mapu s označeným obchodem a žebříček nejlevnějších akcí.
 
 ```yaml
@@ -168,6 +170,8 @@ title: Kam na pivo
 brand: ""            # výchozí značka, např. "Kozel"; prázdné = všechny
 count: 5             # počet akcí v žebříčku
 show_brands: true    # přepínač značek
+degree: ""           # výchozí stupeň v kartě: "10" | "11" | "12" | other, prázdné = každý
+show_degrees: true   # přepínač stupně 10° / 11° / 12°
 packaging: ""        # výchozí obal v kartě: glass | can | pet, prázdné = každý
 show_packaging: true # přepínač obalu 🍾 Sklo / 🥫 Plech / 🧴 PET
 show_map: true       # mapa obchodu (OpenStreetMap)
@@ -275,7 +279,7 @@ entities:
 Otevřete **Nastavení → Zařízení a služby → Akce na pivo → senzor Počet akcí → Atributy**:
 
 - `filter.downloaded`: kolik akcí se celkem stáhlo,
-- `filter.brand_mismatch` / `expired` / `loyalty_excluded` / `packaging_excluded` / …: kolik akcí se vyřadilo a proč,
+- `filter.brand_mismatch` / `expired` / `loyalty_excluded` / `packaging_excluded` / `degree_excluded` / …: kolik akcí se vyřadilo a proč,
 - `filter.sample_products`: ukázka stažených názvů (produkt | obchod | cena | zdroj). Z ní je vidět,
   jestli web vrací správná data,
 - `sources.<zdroj>.errors`: chyby jednotlivých webů, třeba `HTTP 403`, „ochrana proti robotům“

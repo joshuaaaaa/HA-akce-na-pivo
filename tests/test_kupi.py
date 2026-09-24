@@ -189,3 +189,24 @@ def test_section_heading_is_not_product_name():
     assert names == {"Lidl": "Gambrinus Originál 10", "Kaufland": "pivo velkopopovicky kozel 11"}
     assert match_brand(names["Kaufland"], ["Kozel"]) == "Kozel"
     assert all(o["product"] != "Akce dle ceny" for o in offers)
+
+
+def test_detect_degree():
+    from akce_na_pivo.kupi import degree_group, detect_degree
+
+    cases = {
+        "Velkopopovický Kozel 11 0,5 l": 11,
+        "Gambrinus Originál 10 8 × 0,5 l": 10,
+        "Pilsner Urquell 4,4% 0,5 l": 12,  # známé pivo bez čísla, 4,4 % je alkohol
+        "Zlatý Bažant 12% svetlý ležiak 0,5 l": 12,  # SK zápis stupňovitosti
+        "Radegast Rázná 10° 0,5 l": 10,
+        "Staropramen jedenáctka 0,5 l": 11,
+        "Braník světlé výčepní 2 l": 10,
+        "Kozel 11 6 x 0,5 l": 11,
+        "Krušovice 12 ležák 4,9 % 0,5 l": 12,
+        "Holba 14° 0,5 l": 14,
+        "Pivo 10 x 0,5 l": None,  # 10 kusů, ne desítka
+        "Radler 2,0 % 0,5 l": None,
+    }
+    assert {k: detect_degree(k) for k in cases} == cases
+    assert [degree_group(d) for d in (10, 11, 12, 14, None)] == ["10", "11", "12", "other", None]

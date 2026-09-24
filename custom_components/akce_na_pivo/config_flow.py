@@ -15,8 +15,10 @@ from .const import (
     CONF_BRANDS,
     CONF_COUNTRY,
     CONF_CUSTOM_URLS,
+    CONF_DEGREES,
     CONF_EXCLUDE_LOYALTY,
     CONF_EXCLUDE_NONALCOHOLIC,
+    CONF_INCLUDE_UNKNOWN_DEGREE,
     CONF_INCLUDE_UNKNOWN_PACKAGING,
     CONF_INCLUDE_UPCOMING,
     CONF_LOCATION_ENTITY,
@@ -32,8 +34,10 @@ from .const import (
     CONF_UPDATE_TIME,
     COUNTRIES,
     DEFAULT_COUNTRY,
+    DEFAULT_DEGREES,
     DEFAULT_EXCLUDE_LOYALTY,
     DEFAULT_EXCLUDE_NONALCOHOLIC,
+    DEFAULT_INCLUDE_UNKNOWN_DEGREE,
     DEFAULT_INCLUDE_UNKNOWN_PACKAGING,
     DEFAULT_INCLUDE_UPCOMING,
     DEFAULT_MAX_DISTANCE_KM,
@@ -44,6 +48,7 @@ from .const import (
     DEFAULT_TOP_COUNT,
     DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_UPDATE_TIME,
+    DEGREE_OPTIONS,
     DOMAIN,
     KNOWN_BRANDS,
     MAX_TOP_COUNT,
@@ -116,6 +121,20 @@ def _schema(values: dict[str, Any], country: str) -> vol.Schema:
                 default=values.get(
                     CONF_INCLUDE_UNKNOWN_PACKAGING, DEFAULT_INCLUDE_UNKNOWN_PACKAGING
                 ),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_DEGREES, default=values.get(CONF_DEGREES, DEFAULT_DEGREES)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=DEGREE_OPTIONS,
+                    multiple=True,
+                    translation_key=CONF_DEGREES,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            ),
+            vol.Required(
+                CONF_INCLUDE_UNKNOWN_DEGREE,
+                default=values.get(CONF_INCLUDE_UNKNOWN_DEGREE, DEFAULT_INCLUDE_UNKNOWN_DEGREE),
             ): selector.BooleanSelector(),
             vol.Required(
                 CONF_SOURCES,
@@ -234,6 +253,9 @@ def _clean(user_input: dict[str, Any], country: str) -> dict[str, Any]:
     data[CONF_PACKAGING] = [p for p in data.get(CONF_PACKAGING) or [] if p in PACKAGING_OPTIONS]
     if not data[CONF_PACKAGING]:
         data[CONF_PACKAGING] = list(PACKAGING_OPTIONS)
+    data[CONF_DEGREES] = [d for d in data.get(CONF_DEGREES) or [] if d in DEGREE_OPTIONS]
+    if not data[CONF_DEGREES]:
+        data[CONF_DEGREES] = list(DEGREE_OPTIONS)
     allowed = country_sources(country)
     data[CONF_SOURCES] = [s for s in data.get(CONF_SOURCES) or [] if s in allowed]
     if not data[CONF_SOURCES] and not data.get(CONF_CUSTOM_URLS):

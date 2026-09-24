@@ -16,6 +16,8 @@
           "brands": "Značky piva",
           "packaging": "Obal piva",
           "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
+          "degrees": "Stupňovitost",
+          "include_unknown_degree": "Zahrnout akce, u kterých stupeň nejde poznat",
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
@@ -34,7 +36,9 @@
         "data_description": {
           "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
           "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
-          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený."
+          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
+          "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá."
         }
       }
     },
@@ -50,6 +54,8 @@
           "brands": "Značky piva",
           "packaging": "Obal piva",
           "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
+          "degrees": "Stupňovitost",
+          "include_unknown_degree": "Zahrnout akce, u kterých stupeň nejde poznat",
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
@@ -68,7 +74,9 @@
         "data_description": {
           "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
           "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
-          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený."
+          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
+          "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá."
         }
       }
     },
@@ -89,6 +97,14 @@
         "glass": "🍾 Sklo (láhev)",
         "can": "🥫 Plech (plechovka)",
         "pet": "🧴 PET láhev"
+      }
+    },
+    "degrees": {
+      "options": {
+        "10": "10° (desítka)",
+        "11": "11° (jedenáctka)",
+        "12": "12° (dvanáctka)",
+        "other": "Ostatní (výčepní 7–9°, speciály 13° a víc)"
       }
     }
   },

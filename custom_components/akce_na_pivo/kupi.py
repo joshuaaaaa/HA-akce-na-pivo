@@ -200,6 +200,64 @@ def detect_packaging(*texts: str | None, volume: float | None = None) -> str | N
     return None
 
 
+# Stupňovitost piva (10°, 11°, 12°…)
+_DEGREE_EXPLICIT = re.compile(r"(?<![\d,.\-])(\d{1,2})\s*(?:°|%|stup)")
+_DEGREE_BARE = re.compile(
+    r"(?<![\d,.x×])\b(1[0-6]|[7-9])\b"
+    r"(?!\s*(?:x\b|×|ks|kus|l\b|ml\b|,\d|\.\d|pack|-pack|plech|lahv|%|°))"
+)
+_DEGREE_WORDS = {
+    "desitka": 10,
+    "desinka": 10,
+    "jedenactka": 11,
+    "dvanactka": 12,
+    "vycepni": 10,
+    "vycapne": 10,
+}
+# známá piva, u kterých stupeň v názvu často chybí
+_DEGREE_KNOWN = (
+    ("pilsner urquell", 12),
+    ("gambrinus original", 10),
+    ("gambrinus plna", 12),
+    ("radegast razna", 10),
+    ("radegast ryze horka", 12),
+    ("kozel svetly", 10),
+    ("kozel premium", 11),
+    ("budweiser budvar b:original", 12),
+    ("budvar b:original", 12),
+    ("zlaty bazant 73", 10),
+)
+
+
+def detect_degree(*texts: str | None) -> int | None:
+    """Stupňovitost z názvu: "Kozel 11", "12°", "12%" (SK), "desítka"… jinak None."""
+    norms = [normalize(t) for t in texts if t]
+    for norm in norms:
+        for match in _DEGREE_EXPLICIT.finditer(norm):
+            value = int(match.group(1))
+            # "%" bez desetinné čárky ve slovenských názvech = stupňovitost (7–16)
+            if 6 <= value <= 20 and not (match.group(0).endswith("%") and value < 7):
+                return value
+        for word, value in _DEGREE_WORDS.items():
+            if word in norm:
+                return value
+        match = _DEGREE_BARE.search(norm)
+        if match:
+            return int(match.group(1))
+    joined = " ".join(norms)
+    for name, value in _DEGREE_KNOWN:
+        if name in joined:
+            return value
+    return None
+
+
+def degree_group(degree: int | None) -> str | None:
+    """10 / 11 / 12 -> "10" / "11" / "12", jiná stupňovitost -> "other"."""
+    if degree is None:
+        return None
+    return str(degree) if degree in (10, 11, 12) else "other"
+
+
 def brand_aliases(brand: str) -> tuple[str, ...]:
     if brand in KNOWN_BRANDS:
         return KNOWN_BRANDS[brand][0]
@@ -451,6 +509,7 @@ def build_offer(
         "loyalty": loyalty,
         "nonalcoholic": is_nonalcoholic(name),
         "packaging": detect_packaging(name, amount, packaging_hint, volume=volume),
+        "degree": detect_degree(name),
         "url": url,
         "image": image,
     }

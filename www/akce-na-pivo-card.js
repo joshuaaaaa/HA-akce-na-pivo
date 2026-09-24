@@ -11,7 +11,7 @@
  * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "2.1.0";
+const CARD_VERSION = "2.2.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const PACKAGING_ICONS = { glass: "🍾 sklo", can: "🥫 plech", pet: "🧴 PET" };
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -186,7 +186,7 @@ class AkceNaPivoCard extends HTMLElement {
         ${cfg.show_images && o.image ? `<img class="img" src="${esc(o.image)}" alt="" loading="lazy">` : ""}
         <div class="info">
           <div class="product">${esc(o.product)}</div>
-          <div class="shop">${esc(o.shop)}${PACKAGING_ICONS[o.packaging] ? ` · ${PACKAGING_ICONS[o.packaging]}` : ""}${o.amount ? ` · ${esc(o.amount)}` : ""}${o.loyalty ? ` · <ha-icon class="small" icon="mdi:card-account-details-outline"></ha-icon>` : ""}</div>
+          <div class="shop">${esc(o.shop)}${o.degree ? ` · <b>${Number(o.degree)}°</b>` : ""}${PACKAGING_ICONS[o.packaging] ? ` · ${PACKAGING_ICONS[o.packaging]}` : ""}${o.amount ? ` · ${esc(o.amount)}` : ""}${o.loyalty ? ` · <ha-icon class="small" icon="mdi:card-account-details-outline"></ha-icon>` : ""}</div>
           ${where ? `<div class="where">${where}</div>` : ""}
           ${o.opening_hours && selected ? `<div class="where">🕒 ${esc(o.opening_hours)}</div>` : ""}
           <div class="meta">${validity ? `<span class="valid">${validity}</span>` : ""}${flags}${this._sourceChips(o)}</div>
