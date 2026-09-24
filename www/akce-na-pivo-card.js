@@ -11,7 +11,7 @@
  * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "2.3.0";
+const CARD_VERSION = "2.4.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 // Texty karty – čeština, slovenčina, angličtina
 const I18N = {
@@ -49,7 +49,23 @@ let EDITOR_LANG = "cs";
 const PACKAGING_ICONS = { glass: "🍾", can: "🥫", pet: "🧴" };
 // štítky, které zvýrazníme (podle klíče z integrace; starší verze posílaly jen text)
 const HOT_FLAGS = ["history_min", "below_limit"];
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Mapové podklady. Dlaždice přímo z tile.openstreetmap.org OSM blokuje ("Access blocked"),
+// protože Home Assistant neposílá hlavičku Referer – proto výchozí CARTO (data z OpenStreetMap).
+const RETINA = (window.devicePixelRatio || 1) > 1.5;
+const TILE_PROVIDERS = {
+  carto: {
+    url: (z, x, y) => `https://${"abcd"[(x + y) % 4]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}${RETINA ? "@2x" : ""}.png`,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+  },
+  carto_dark: {
+    url: (z, x, y) => `https://${"abcd"[(x + y) % 4]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${RETINA ? "@2x" : ""}.png`,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+  },
+  osm: {
+    url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+  },
+};
 const TILE = 256;
 
 console.info(
@@ -343,6 +359,12 @@ class AkceNaPivoCard extends HTMLElement {
     return null;
   }
 
+  _tileProvider() {
+    let style = this._config.map_style || "auto";
+    if (style === "auto") style = this._hass?.themes?.darkMode ? "carto_dark" : "carto";
+    return TILE_PROVIDERS[style] || TILE_PROVIDERS.carto;
+  }
+
   _currentView() {
     const el = this.shadowRoot.getElementById("map");
     if (!el) return null;
@@ -369,6 +391,7 @@ class AkceNaPivoCard extends HTMLElement {
       el.innerHTML = "";
       return;
     }
+    const provider = this._tileProvider();
     const left = v.cx - width / 2;
     const top = v.cy - height / 2;
     const n = 2 ** v.z;
@@ -377,8 +400,8 @@ class AkceNaPivoCard extends HTMLElement {
       if (ty < 0 || ty >= n) continue;
       for (let tx = Math.floor(left / TILE); tx <= Math.floor((left + width) / TILE); tx++) {
         const x = ((tx % n) + n) % n;
-        const src = TILE_URL.replace("{z}", v.z).replace("{x}", x).replace("{y}", ty);
-        tiles += `<img class="tile" alt="" draggable="false" src="${src}" style="left:${Math.round(tx * TILE - left)}px;top:${Math.round(ty * TILE - top)}px">`;
+        const src = provider.url(v.z, x, ty);
+        tiles += `<img class="tile" alt="" draggable="false" referrerpolicy="strict-origin-when-cross-origin" src="${src}" style="left:${Math.round(tx * TILE - left)}px;top:${Math.round(ty * TILE - top)}px">`;
       }
     }
     const { points, home } = this._mapPoints();
@@ -400,7 +423,7 @@ class AkceNaPivoCard extends HTMLElement {
         <button data-zoom="-1" title="${this._t("zoom_out")}">−</button>
         <button data-fit="1" title="${this._t("fit")}">⤢</button>
       </div>
-      <div class="attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>`;
+      <div class="attribution">${provider.attribution}</div>`;
     el.querySelectorAll(".pin[data-index]").forEach((node) =>
       node.addEventListener("click", () => this._select(Number(node.dataset.index)))
     );
@@ -501,21 +524,21 @@ const LABELS = {
   cs: {
     entity: "Entita (senzor Nejlevnější pivo)", title: "Nadpis (prázdné = výchozí)", language: "Jazyk karty",
     count: "Počet zobrazených nabídek", sort: "Řazení v kartě", show_map: "Zobrazit mapu",
-    map_height: "Výška mapy (px)", show_images: "Obrázky produktů", show_address: "Adresa obchodu",
+    map_height: "Výška mapy (px)", map_style: "Mapový podklad", show_images: "Obrázky produktů", show_address: "Adresa obchodu",
     show_flags: "Štítky (sleva, historické minimum…)", show_source: "Zdroj akce (Kupi, Kompas Slev…)",
     show_upcoming: "Zobrazit připravované akce",
   },
   sk: {
     entity: "Entita (senzor Najlacnejšie pivo)", title: "Nadpis (prázdne = predvolený)", language: "Jazyk karty",
     count: "Počet zobrazených ponúk", sort: "Zoradenie v karte", show_map: "Zobraziť mapu",
-    map_height: "Výška mapy (px)", show_images: "Obrázky produktov", show_address: "Adresa obchodu",
+    map_height: "Výška mapy (px)", map_style: "Mapový podklad", show_images: "Obrázky produktov", show_address: "Adresa obchodu",
     show_flags: "Štítky (zľava, historické minimum…)", show_source: "Zdroj akcie (Zlacnene, Kimbino…)",
     show_upcoming: "Zobraziť pripravované akcie",
   },
   en: {
     entity: "Entity (Cheapest beer sensor)", title: "Title (empty = default)", language: "Card language",
     count: "Number of deals shown", sort: "Sorting in the card", show_map: "Show map",
-    map_height: "Map height (px)", show_images: "Product images", show_address: "Store address",
+    map_height: "Map height (px)", map_style: "Map style", show_images: "Product images", show_address: "Store address",
     show_flags: "Labels (discount, historic low…)", show_source: "Deal source (Kupi, Kompas Slev…)",
     show_upcoming: "Show upcoming deals",
   },
@@ -562,6 +585,20 @@ const editorSchema = (lang) => {
         },
         { name: "show_map", selector: { boolean: {} } },
         { name: "map_height", selector: { number: { min: 120, max: 600, step: 10, mode: "box" } } },
+        {
+          name: "map_style",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: [
+                { value: "auto", label: "Auto (světlá / tmavá podle motivu)" },
+                { value: "carto", label: "CARTO Voyager" },
+                { value: "carto_dark", label: "CARTO Dark" },
+                { value: "osm", label: "OpenStreetMap (může být blokované)" },
+              ],
+            },
+          },
+        },
         { name: "show_images", selector: { boolean: {} } },
         { name: "show_address", selector: { boolean: {} } },
         { name: "show_flags", selector: { boolean: {} } },

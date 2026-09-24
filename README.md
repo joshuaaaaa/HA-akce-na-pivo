@@ -207,8 +207,10 @@ obchody** (očíslované špendlíky podle pořadí) a vaší polohou 🏠.
 - Klepnutím na nabídku nebo na špendlík se obchod na mapě přiblíží a zvýrazní. Objeví se
   odkazy **Mapy.com**, **Navigovat** a **Leták**.
 - Mapou jde posouvat tažením. Tlačítka **+ / −** mění přiblížení, **⤢** ukáže všechny obchody.
-- Mapa se kreslí přímo z dlaždic OpenStreetMap, bez externích knihoven. Stačí přístup
-  prohlížeče na `tile.openstreetmap.org`.
+- Mapa se kreslí přímo z dlaždic, bez externích knihoven. Výchozí podklad je **CARTO Voyager**
+  (data OpenStreetMap), v tmavém motivu HA **CARTO Dark**. Přímé dlaždice z
+  `tile.openstreetmap.org` HA blokuje hláškou „Access blocked“, protože neposílá hlavičku
+  Referer. Proto se nepoužívají, pokud je výslovně nenastavíte (`map_style: osm`).
 
 ```yaml
 type: custom:akce-na-pivo-card
@@ -218,6 +220,7 @@ count: 5            # kolik nabídek zobrazit (1–10)
 sort: ""            # "" = podle integrace, nebo unit | price | distance
 show_map: true
 map_height: 240
+map_style: auto     # auto | carto | carto_dark | osm
 show_images: true
 show_address: true
 show_flags: true
@@ -307,6 +310,10 @@ Otevřete **Nastavení → Zařízení a služby → Akce na pivo → senzor Po�
 
 Stejné shrnutí se zapíše i do logu jako varování „Staženo N akcí, ale žádná neodpovídá nastavení“.
 Když chcete nahlásit chybu, pošlete tyto atributy.
+
+**Na mapě je „Access blocked – App is not following the tile usage policy…“.** Máte starou
+verzi karty `akce-na-pivo-card.js` (s knihovnou Leaflet a dlaždicemi OpenStreetMap). Nahraďte
+soubor v `/config/www/` novou verzí, zvyšte verzi v URL zdroje a obnovte prohlížeč (Ctrl+F5).
 
 **„OpenStreetMap (Overpass) nedostupné“.** Veřejné servery Overpass bývají přetížené.
 Integrace zkusí tři servery a nejdřív přesný dotaz omezený na území státu. Když neuspěje,
