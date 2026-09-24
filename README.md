@@ -1,4 +1,5 @@
 # 🍺 Akce na pivo – Home Assistant
+<img width="564" height="742" alt="image" src="https://github.com/user-attachments/assets/d0f6dd49-59af-4da9-8742-6af37f790222" />
 
 Integrace pro Home Assistant, která každý den (nebo v čase, který si nastavíte) zjistí,
 **kde je nejlevnější pivo v akci**, najde **nejbližší pobočku** daného obchodu k vašemu
@@ -333,11 +334,7 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
   konkrétní akce se tam ale může lišit (třeba hypermarket vs. supermarket).
 - Pobočky z OpenStreetMap se ukládají do mezipaměti na 7 dní a obnoví se, když se změní poloha.
 
-## Vývoj
 
-```bash
-pip install beautifulsoup4 pytest
-pytest tests/test_kupi.py tests/test_generic.py   # parsery bez Home Assistantu
-pip install pytest-homeassistant-custom-component
-pytest tests                         # včetně testu integrace
-```
+## http://buymeacoffee.com/jakubhruby
+
+<img width="150" height="150" alt="qr-code" src="https://github.com/user-attachments/assets/2581bf36-7f7d-4745-b792-d1abaca6e57d" />
