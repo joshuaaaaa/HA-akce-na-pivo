@@ -67,7 +67,7 @@ from .const import (
     country_sources,
 )
 from .generic import dedupe, parse_generic
-from .kupi import match_brand, normalize, parse_offers
+from .kupi import kupi_html_sample, match_brand, normalize, parse_offers
 from .stores import (
     fetch_stores,
     haversine_km,
@@ -275,6 +275,8 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if code in (404, 410) and template and source != SOURCE_KUPI:
                         self._mark_dead(template)
                 break
+            if page == 1 and "kupi.cz" in url and "html_sample" not in status:
+                status["html_sample"] = kupi_html_sample(html)
             page_offers = [o for o in self._parse(source, html, url, today) if o["id"] not in seen]
             if not page_offers:
                 if page == 1:
@@ -655,6 +657,8 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "top": current[:top_count],
             "upcoming": upcoming[:top_count],
             "brands": brands,
+            # vybrané značky, na které teď žádná akce není
+            "not_on_sale": [b for b in self.brands if b != ALL_BRANDS and b not in brands],
             "packaging_best": packaging,
             "location": {"latitude": lat, "longitude": lon, "source": source},
             "sort_by": sort_by,

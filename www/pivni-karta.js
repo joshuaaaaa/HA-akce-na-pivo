@@ -12,7 +12,7 @@
  *   3. do dashboardu přidejte kartu "Pivní karta" (type: custom:pivni-karta)
  */
 
-const PIVNI_KARTA_VERSION = "1.1.0";
+const PIVNI_KARTA_VERSION = "1.2.0";
 
 console.info(
   `%c 🍺 PIVNI-KARTA %c v${PIVNI_KARTA_VERSION} `,
@@ -129,7 +129,8 @@ class PivniKarta extends HTMLElement {
     const attrs = this._attrs();
     const symbol = attrs.currency_symbol || "Kč";
     const { best, list } = this._selection(attrs);
-    const brandNames = Object.keys(attrs.brands || {});
+    const notOnSale = attrs.not_on_sale || [];
+    const brandNames = [...Object.keys(attrs.brands || {}), ...notOnSale.filter((b) => !(attrs.brands || {})[b])];
     const packKinds = Object.keys(PACKAGING).filter(
       (k) => (attrs.packaging_best || {})[k] || (attrs.offers || []).some((o) => o.packaging === k)
     );
@@ -159,15 +160,16 @@ class PivniKarta extends HTMLElement {
           ${this._config.show_brands && brandNames.length > 1 ? `
             <div class="brands" role="tablist">
               <button class="chip ${!this._brand || this._brand === ALL ? "on" : ""}" data-brand="${ALL}">Vše</button>
-              ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""}" data-brand="${esc(b)}">${esc(b)}</button>`).join("")}
+              ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""} ${notOnSale.includes(b) ? "off" : ""}" data-brand="${esc(b)}" ${notOnSale.includes(b) ? 'title="Není v akci"' : ""}>${esc(b)}</button>`).join("")}
             </div>` : ""}
+          ${notOnSale.length && (!this._brand || this._brand === ALL) ? `<div class="nosale">❌ Není v akci: ${notOnSale.map(esc).join(", ")}</div>` : ""}
           ${this._config.show_packaging && packKinds.length ? `
             <div class="brands packs" role="tablist">
               <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">Každý obal</button>
               ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${PACKAGING[k].label}</button>`).join("")}
             </div>` : ""}
 
-          ${best ? this._hero(best, symbol) : `<div class="empty">Na ${this._brand && this._brand !== ALL ? esc(this._brand) : "vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""} teď žádná akce není 😢</div>`}
+          ${best ? this._hero(best, symbol) : `<div class="hero nosale-hero"><div class="go">Bohužel</div><div class="shop">${this._brand && this._brand !== ALL ? esc(this._brand) : "Vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""}</div><div class="where">teď není v akci 😢</div></div>`}
 
           ${best && this._config.show_map && best.latitude != null ? this._map(best) : ""}
 
@@ -307,6 +309,10 @@ const STYLE = `
     background: rgba(255,250,240,.55); box-shadow: inset 0 0 0 1px rgba(90,48,0,.15);
   }
   .chip.on { background:#3b1f00; color:#ffd35c; box-shadow:none; }
+  .chip.off:not(.on) { opacity:.6; text-decoration: line-through; }
+  .nosale { margin: -4px 2px 10px; font-size:.82em; font-weight:700; color:#4a2600; }
+  .nosale-hero .shop { padding-right: 0; }
+  .nosale-hero .where { font-size: 1.05em; font-weight: 700; }
 
   .hero {
     background: rgba(255,250,240,.9); border-radius: 16px; padding: 14px 14px 12px;

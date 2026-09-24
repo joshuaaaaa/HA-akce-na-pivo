@@ -170,7 +170,11 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
     assert where.attributes["summary"].startswith("Penny, Seifertova 1, 13000 Praha")
     where_pu = hass.states.get("sensor.pivo_where_to_buy_pilsner_urquell")
     assert where_pu.state == "Kaufland"  # Kompas Slev 19,90 Kč < Albert 24,90 Kč
-    assert hass.states.get("sensor.pivo_where_to_buy_moje_pivo").state == "unknown"
+    moje = hass.states.get("sensor.pivo_where_to_buy_moje_pivo")
+    assert moje.state == "Není v akci" and moje.attributes["on_sale"] is False
+    assert cheapest.attributes["not_on_sale"] == ["Moje Pivo"]
+    brand_price = hass.states.get("sensor.pivo_moje_pivo")
+    assert brand_price.state == "unknown" and brand_price.attributes["status"] == "Není v akci"
 
     rank1 = [s for s in hass.states.async_all("sensor") if s.attributes.get("rank") == 1]
     assert rank1 and rank1[0].attributes["latitude"] == 50.09

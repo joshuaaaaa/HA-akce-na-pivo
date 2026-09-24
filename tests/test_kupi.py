@@ -151,3 +151,41 @@ def test_offer_has_packaging():
     )
     assert offers[0]["packaging"] == "can"
     assert offers[2]["packaging"] is None  # Birell bez údaje o obalu
+
+
+def test_section_heading_is_not_product_name():
+    """Reálná chyba: všechny akce měly název „Akce dle ceny“ (nadpis sekce)."""
+    html = """
+    <h1>Akce na pivo levně</h1>
+    <section class="discounts">
+      <h2>Akce dle ceny</h2>
+      <div class="list">
+        <div class="product--wrap" data-product-id="501">
+          <div class="product_name"><h2><a title="Gambrinus Originál 10" href="/sleva/pivo-gambrinus">Gambrinus</a></h2></div>
+          <button class="watch" data-product-id="501">Hlídat</button>
+          <div class="discount_row" data-product="501" data-discount="1">
+            <div class="discounts_shop_name"><a>Lidl</a></div>
+            <span class="discount_price_value">15,90 Kč</span>
+          </div>
+        </div>
+        <div class="item">
+          <div class="discount_row" data-product="777" data-discount="2">
+            <div class="discounts_shop_name"><a>Kaufland</a></div>
+            <span class="discount_price_value">12,90 Kč</span>
+            <a class="product_link_history" href="/sleva/pivo-velkopopovicky-kozel-11">historie</a>
+          </div>
+        </div>
+        <div class="item">
+          <div class="discount_row" data-product="778" data-discount="3">
+            <div class="discounts_shop_name"><a>Tesco</a></div>
+            <span class="discount_price_value">9,90 Kč</span>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+    offers = parse_offers(html, "https://www.kupi.cz/slevy/pivo", TODAY)
+    names = {o["shop"]: o["product"] for o in offers}
+    assert names == {"Lidl": "Gambrinus Originál 10", "Kaufland": "pivo velkopopovicky kozel 11"}
+    assert match_brand(names["Kaufland"], ["Kozel"]) == "Kozel"
+    assert all(o["product"] != "Akce dle ceny" for o in offers)

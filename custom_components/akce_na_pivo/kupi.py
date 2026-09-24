@@ -221,49 +221,72 @@ def _text(node: Any, selector: str) -> str:
     return clean_text(found.get_text(" ", strip=True)) if found else ""
 
 
+def _wrap_info(wrap: Any) -> dict[str, str]:
+    title = wrap.select_one(".product_name h2 a[title], .product_name a[title], h2 a[title]")
+    name = clean_text(title["title"]) if title else _text(wrap, ".product_name h2, .product_name")
+    amount = _text(wrap, ".product_name .nowrap, .product_name .amount")
+    if name and amount and normalize(amount) not in normalize(name):
+        name = f"{name} {amount}".strip()
+    link = wrap.select_one(".product_name a[href], .product_image a[href], a[href*='/sleva/']")
+    img = wrap.select_one(".product_image img, img")
+    image = ""
+    if img is not None:
+        image = str(img.get("data-src") or img.get("src") or "")
+        if image.startswith("data:"):
+            image = ""
+    return {
+        "name": name,
+        "url": urljoin(KUPI_BASE_URL, link["href"]) if link else "",
+        "image": urljoin(KUPI_BASE_URL, image) if image else "",
+    }
+
+
 def _product_lookup(soup: BeautifulSoup) -> dict[str, dict[str, str]]:
+    """Názvy produktů podle data-product-id.
+
+    Atribut data-product-id mají i drobné prvky uvnitř bloku produktu (tlačítka
+    „hlídat“, oblíbené…). Ty nesmí přepsat název nalezený v hlavním bloku.
+    """
     products: dict[str, dict[str, str]] = {}
-    for wrap in soup.select("[data-product-id]"):
+    wraps = soup.select(".product--wrap[data-product-id]") + soup.select("[data-product-id]")
+    for wrap in wraps:
         product_id = str(wrap.get("data-product-id"))
-        title = wrap.select_one(".product_name h2 a[title], .product_name a[title], h2 a[title]")
-        name = (
-            clean_text(title["title"])
-            if title
-            else _text(wrap, ".product_name h2, .product_name, h2")
-        )
-        amount = _text(wrap, ".product_name .nowrap, .product_name .amount")
-        if amount and normalize(amount) not in normalize(name):
-            name = f"{name} {amount}".strip()
-        link = wrap.select_one(".product_name a[href], .product_image a[href], a[href]")
-        img = wrap.select_one(".product_image img, img")
-        image = ""
-        if img is not None:
-            image = str(img.get("data-src") or img.get("src") or "")
-            if image.startswith("data:"):
-                image = ""
-        products[product_id] = {
-            "name": name,
-            "url": urljoin(KUPI_BASE_URL, link["href"]) if link else "",
-            "image": urljoin(KUPI_BASE_URL, image) if image else "",
-        }
+        if products.get(product_id, {}).get("name"):
+            continue
+        info = _wrap_info(wrap)
+        if info["name"] or product_id not in products:
+            products[product_id] = info
     return products
 
 
+def name_from_url(href: str | None) -> str:
+    """'/sleva/pivo-velkopopovicky-kozel-11' -> 'pivo velkopopovicky kozel 11'."""
+    if not href or "/sleva/" not in href:
+        return ""
+    slug = href.split("/sleva/", 1)[1].split("?")[0].split("#")[0].strip("/").split("/")[0]
+    return clean_text(slug.replace("-", " "))
+
+
 def _ancestor_name(row: Any) -> str:
-    """Název produktu z nejbližšího nadřazeného bloku (když chybí data-product-id)."""
+    """Název z nejbližšího bloku produktu nad řádkem slevy.
+
+    Hledá jen v blocích, které jsou opravdu produkt (data-product-id nebo třída
+    s „product“), ne v celé sekci – jinak by se vzal nadpis typu „Akce dle ceny“.
+    """
     node = row
-    for _ in range(6):
+    for _ in range(4):
         node = node.parent
-        if node is None:
+        if node is None or node.name in ("body", "html", "main"):
             return ""
-        found = node.select_one(".product_name h2 a[title], .product_name a[title], h2 a[title]")
-        if found:
-            return clean_text(found["title"])
-        found = node.select_one(".product_name, h2, h3")
-        if found:
-            text = clean_text(found.get_text(" ", strip=True))
-            if text:
-                return text
+        classes = " ".join(node.get("class") or [])
+        if not node.has_attr("data-product-id") and "product" not in classes:
+            continue
+        info = _wrap_info(node)
+        if info["name"]:
+            return info["name"]
+        link = node.select_one("a[href*='/sleva/']")
+        if link and (name := name_from_url(link["href"])):
+            return name
     return ""
 
 
@@ -274,6 +297,15 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
     page_title = _text(soup, "h1")
     # nadpis stránky je název produktu jen na detailu (/sleva/...), ne na výpisu kategorie
     is_detail = "/sleva/" in source_url
+    # nadpisy sekcí stránky ("Akce dle ceny", "Pivo v akci"…) nejsou názvy produktů
+    headings = {
+        normalize(h.get_text(" ", strip=True))
+        for h in soup.select("h1, h2, h3, h4")
+        if not h.find_parent(attrs={"data-product-id": True})
+        and not h.find_parent(class_=re.compile("product"))
+    }
+    if is_detail:
+        headings.discard(normalize(page_title))
     offers: list[dict[str, Any]] = []
 
     for row in soup.select(".discount_row"):
@@ -282,7 +314,16 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
             parent = row.find_parent(attrs={"data-product-id": True})
             product_id = str(parent.get("data-product-id")) if parent else ""
         product = products.get(product_id, {})
-        name = product.get("name") or _ancestor_name(row) or (page_title if is_detail else "")
+        row_link = row.select_one("a.product_link_history[href], a[href*='/sleva/']")
+        candidates = (
+            product.get("name"),
+            _ancestor_name(row),
+            name_from_url(row_link["href"] if row_link else ""),
+            name_from_url(product.get("url")),
+        )
+        name = next((c for c in candidates if c and normalize(c) not in headings), "")
+        if not name and is_detail:
+            name = page_title
         shop = _text(row, ".discounts_shop_name a, .discounts_shop_name")
         price = parse_price(_text(row, ".discount_price_value, .discount_price"))
         if not name or not shop or price is None:
@@ -337,6 +378,13 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
                 image=product.get("image", ""),
             )
         )
+    if not is_detail:
+        # stejný "název" u mnoha různých produktů = nadpis stránky/sekce, ne jméno piva
+        ids_by_name: dict[str, set[str]] = {}
+        for offer in offers:
+            ids_by_name.setdefault(normalize(offer["product"]), set()).add(offer["product_id"])
+        generic = {name for name, ids in ids_by_name.items() if len(ids) > 3}
+        offers = [o for o in offers if normalize(o["product"]) not in generic]
     return offers
 
 
@@ -406,3 +454,18 @@ def build_offer(
         "url": url,
         "image": image,
     }
+
+
+def kupi_html_sample(html: str, limit: int = 1500) -> str:
+    """Zkrácené HTML první akce se dvěma nadřazenými bloky – pro diagnostiku."""
+    soup = BeautifulSoup(html, "html.parser")
+    row = soup.select_one(".discount_row")
+    if row is None:
+        return "stránka neobsahuje .discount_row"
+    node = row
+    for _ in range(2):
+        if node.parent is not None and node.parent.name not in ("body", "html"):
+            node = node.parent
+    for tag in node.find_all(["script", "style", "svg"]):
+        tag.decompose()
+    return " ".join(str(node).split())[:limit]

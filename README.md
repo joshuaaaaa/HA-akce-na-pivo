@@ -155,7 +155,9 @@ např. `/local/pivni-karta.js?v=4`, aby prohlížeč nenačítal starou verzi z 
 - produkt, cena, cena za 0,5 l, přeškrtnutá původní cena a štítek se slevou,
 - štítky jako „Nejlevněji za posledních 120 dní“ nebo „Končí dnes“,
 - tlačítka **Navigovat**, **Mapa** a **Leták**,
-- **přepínač značek** (Vše / Kozel / Pilsner Urquell…): po klepnutí na značku ukáže, kam jít pro ni,
+- **přepínač značek** (Vše / Kozel / Pilsner Urquell…): po klepnutí na značku ukáže, kam jít pro ni.
+  Vybrané značky, na které teď akce není, jsou přeškrtnuté a karta u nich napíše **„teď není v akci“**.
+  Ostatní značky se zobrazují normálně.
 - **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“,
 - mapu s označeným obchodem a žebříček nejlevnějších akcí.
 
@@ -211,9 +213,9 @@ show_upcoming: false
 | `sensor.*_nejlevnejsi_pivo` | cena za 0,5 l (nebo za balení) | atribut `offers` = TOP N, `upcoming`, `brands`, `location`; zdroj dat pro kartu |
 | `sensor.*_nejlevnejsi_pivo_za_0_5_l` | Kč (€)/0,5 l | vhodné do grafu historie |
 | `sensor.*_pivo_1` … `_pivo_N` | cena balení | mají `latitude`/`longitude`, takže je zobrazí i standardní karta Mapa |
-| `sensor.*_<značka>` | cena | nejlevnější akce každé vybrané značky |
+| `sensor.*_<značka>` | cena | nejlevnější akce každé vybrané značky; bez akce je stav „neznámý“ a atribut `status: Není v akci` |
 | `sensor.*_kam_pro_pivo` | **název obchodu**, např. `Kaufland` | kam jít pro celkově nejlevnější pivo; atributy `address`, `distance_km`, `navigate_url`, `product`, `price` a `summary` („Kaufland, Bělehradská 118, Praha (1,2 km): Kozel 11 0,5 l za 13,90 Kč“) |
-| `sensor.*_kam_pro_<značka>` | **název obchodu** | kam jít pro konkrétní vybranou značku |
+| `sensor.*_kam_pro_<značka>` | **název obchodu**, nebo **`Není v akci`** | kam jít pro konkrétní vybranou značku; atribut `on_sale` (true/false) |
 | `binary_sensor.*_levne_pivo_pod_limitem` | on/off | je v akci pivo pod limitem? |
 | `button.*_aktualizovat_akce` | – | okamžitá aktualizace |
 | `sensor.*_pocet_akci` | počet | diagnostika: stav každého zdroje (akce, funkční URL, chyby) |

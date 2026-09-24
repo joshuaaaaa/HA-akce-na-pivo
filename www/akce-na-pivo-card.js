@@ -11,7 +11,7 @@
  * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "2.0.0";
+const CARD_VERSION = "2.1.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const PACKAGING_ICONS = { glass: "🍾 sklo", can: "🥫 plech", pet: "🧴 PET" };
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -144,7 +144,8 @@ class AkceNaPivoCard extends HTMLElement {
           </div>
           <button class="icon-btn" id="refresh" title="Aktualizovat"><ha-icon icon="mdi:refresh"></ha-icon></button>
         </div>
-        ${offers.length === 0 ? `<div class="empty">Žádné akce na vybrané pivo 😢</div>` : ""}
+        ${(attrs.not_on_sale || []).length ? `<div class="nosale">❌ Není v akci: ${attrs.not_on_sale.map(esc).join(", ")}</div>` : ""}
+        ${offers.length === 0 ? `<div class="empty">Žádné vybrané pivo teď není v akci 😢</div>` : ""}
         ${this._config.show_map && offers.some((o) => o.latitude) ? `<div id="map" style="height:${Number(this._config.map_height) || 240}px"></div>` : ""}
         <div class="list">${offers.map((o, i) => this._row(o, i)).join("")}</div>
         ${upcoming.length ? `<div class="section">Připravované akce</div><div class="list">${upcoming.map((o, i) => this._row(o, i, true)).join("")}</div>` : ""}
@@ -409,6 +410,7 @@ const STYLE = `
   .old { text-decoration: line-through; color: var(--secondary-text-color); font-size:.8em; }
   .disc { display:inline-block; background:#c62828; color:#fff; border-radius:6px; padding:0 5px; font-size:.75em; font-weight:700; }
   .unit { color: var(--secondary-text-color); font-size:.78em; white-space:nowrap; margin-top:2px; }
+  .nosale { padding: 0 16px 6px; font-size: .85em; color: var(--secondary-text-color); }
   .empty, .warn { padding: 16px; color: var(--secondary-text-color); }
   ha-icon.small { --mdc-icon-size: 16px; vertical-align: -3px; }
   .pin { width:28px; height:28px; border-radius:50%; background:#d98e04; color:#fff; font-weight:700;

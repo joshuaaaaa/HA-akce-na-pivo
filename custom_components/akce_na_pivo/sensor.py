@@ -101,6 +101,7 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
                     key: status.get("name") for key, status in (data.get("sources") or {}).items()
                 },
                 "by_source": data.get("by_source"),
+                "not_on_sale": data.get("not_on_sale", []),
                 "country": data.get("country"),
                 "currency": data.get("currency"),
                 "currency_symbol": data.get("currency_symbol"),
@@ -223,7 +224,18 @@ class BrandSensor(CurrencyUnit, BeerEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return offer_attributes(self._offer)
+        attrs = offer_attributes(self._offer)
+        attrs["on_sale"] = bool(self._offer)
+        if not self._offer:
+            attrs["status"] = _not_on_sale(self.coordinator)
+        return attrs
+
+
+NOT_ON_SALE = {"CZ": "Není v akci", "SK": "Nie je v akcii"}
+
+
+def _not_on_sale(coordinator: BeerDealsCoordinator) -> str:
+    return NOT_ON_SALE.get(coordinator.country, NOT_ON_SALE["CZ"])
 
 
 def _money(value: float | None, symbol: str) -> str:
@@ -259,13 +271,22 @@ class WhereToGoSensor(BeerEntity, SensorEntity):
     def native_value(self) -> str | None:
         offer = self._offer
         if not offer:
-            return None
+            # data už jsou, jen na tohle pivo teď žádná akce není
+            return _not_on_sale(self.coordinator) if self.coordinator.data else None
         return (offer.get("store_name") or offer["shop"])[:255]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         offer = self._offer
         attrs = offer_attributes(offer)
+        attrs["on_sale"] = bool(offer)
+        if not offer:
+            attrs["for_brand"] = self._brand
+            attrs["summary"] = (
+                f"{self._brand}: {_not_on_sale(self.coordinator).lower()}"
+                if self._brand
+                else _not_on_sale(self.coordinator)
+            )
         if offer:
             symbol = self.coordinator.currency_symbol
             parts = [offer.get("store_name") or offer["shop"]]
