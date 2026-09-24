@@ -3,10 +3,14 @@
     "step": {
       "user": {
         "title": "Akce na pivo",
-        "description": "Pojmenujte integraci a vyberte zemi. Pro Česko se použijí české weby (ceny v Kč), pro Slovensko slovenské (ceny v €). Chcete-li obě země, přidejte integraci dvakrát.",
+        "description": "Pojmenujte integraci, vyberte jazyk a zemi. Pro Česko se použijí české weby (ceny v Kč), pro Slovensko slovenské (ceny v €). Chcete-li obě země, přidejte integraci dvakrát.",
         "data": {
           "name": "Název",
+          "language": "Jazyk textů v senzorech",
           "country": "Země"
+        },
+        "data_description": {
+          "language": "Jazyk štítků akcí, textu „Není v akci“ a shrnutí. Automaticky = podle jazyka Home Assistantu."
         }
       },
       "settings": {
@@ -51,6 +55,7 @@
       "init": {
         "title": "Akce na pivo – nastavení ({country})",
         "data": {
+          "language": "Jazyk textů v senzorech",
           "brands": "Značky piva",
           "packaging": "Obal piva",
           "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
@@ -76,7 +81,8 @@
           "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
           "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
           "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
-          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá."
+          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá.",
+          "language": "Jazyk štítků akcí, textu „Není v akci“ a shrnutí. Automaticky = podle jazyka Home Assistantu."
         }
       }
     },
@@ -105,6 +111,14 @@
         "11": "11° (jedenáctka)",
         "12": "12° (dvanáctka)",
         "other": "Ostatní (výčepní 7–9°, speciály 13° a víc)"
+      }
+    },
+    "language": {
+      "options": {
+        "auto": "Automaticky (podle jazyka HA)",
+        "cs": "Čeština",
+        "sk": "Slovenčina",
+        "en": "English"
       }
     }
   },

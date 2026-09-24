@@ -38,6 +38,7 @@ OFFER_ATTRS = (
     "degree",
     "upcoming",
     "flags",
+    "flag_keys",
     "store_name",
     "address",
     "opening_hours",

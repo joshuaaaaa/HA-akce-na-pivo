@@ -1,0 +1,166 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Akcie na pivo",
+        "description": "Pomenujte integráciu, vyberte jazyk a krajinu. Pre Česko sa použijú české weby (ceny v Kč), pre Slovensko slovenské (ceny v €). Ak chcete obe krajiny, pridajte integráciu dvakrát.",
+        "data": {
+          "name": "Názov",
+          "language": "Jazyk textov v senzoroch",
+          "country": "Krajina"
+        },
+        "data_description": {
+          "language": "Jazyk štítkov akcií, textu „Nie je v akcii“ a zhrnutí. Automaticky = podľa jazyka Home Assistantu."
+        }
+      },
+      "settings": {
+        "title": "Akcie na pivo – {country}",
+        "description": "Vyberte značky piva (alebo napíšte vlastné a potvrďte Enterom), weby s akciami, odkiaľ počítať vzdialenosť a kedy akcie kontrolovať. Predajne sa hľadajú v OpenStreetMap iba v krajine {country}.",
+        "data": {
+          "brands": "Značky piva",
+          "packaging": "Obal piva",
+          "include_unknown_packaging": "Zahrnúť akcie, pri ktorých sa obal nedá rozpoznať",
+          "degrees": "Stupňovitosť",
+          "include_unknown_degree": "Zahrnúť akcie, pri ktorých sa stupeň nedá rozpoznať",
+          "sources": "Zdroje akcií",
+          "custom_urls": "Vlastné URL stránok s akciami (jedna na riadok)",
+          "location_entity": "Poloha (osoba / telefón / zóna) – prázdne = domov HA",
+          "update_time": "Čas dennej kontroly",
+          "update_interval_hours": "Navyše kontrolovať každých N hodín (0 = iba denne)",
+          "top_count": "Koľko najlacnejších ponúk zobraziť",
+          "sort_by": "Zoradiť podľa",
+          "max_distance_km": "Hľadať predajne do vzdialenosti",
+          "require_nearby_store": "Zobraziť iba obchody, ktoré majú predajňu v okolí",
+          "price_alert": "Upozorniť, keď 0,5 l stojí menej ako",
+          "include_upcoming": "Zahrnúť aj akcie, ktoré ešte len začnú",
+          "exclude_loyalty": "Vynechať akcie iba s vernostnou kartou/aplikáciou",
+          "exclude_nonalcoholic": "Vynechať nealko pivo",
+          "max_pages": "Max. počet stránok kupi.cz na stiahnutie"
+        },
+        "data_description": {
+          "custom_urls": "Voliteľné. Do adresy možno vložiť zástupný znak query (hľadaná značka) alebo slug (značka v tvare zlaty-bazant) v zložených zátvorkách – príklady sú v README.",
+          "packaging": "Obal sa rozpozná z názvu akcie (plech, plechovka, fľaša, sklo, PET…). Pivo od 1 l sa berie ako PET.",
+          "include_unknown_packaging": "Letáky obal často neuvádzajú. Vypnutím zobrazíte iba akcie, kde je obal isto uvedený.",
+          "degrees": "Stupeň sa rozpozná z názvu akcie (Zlatý Bažant 12%, Kozel 11, 10°, desiatka…). Pri známych pivách bez čísla v názve sa doplní, napr. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "Keď je vypnuté, zobrazia sa iba akcie, pri ktorých je stupňovitosť isto známa."
+        }
+      }
+    },
+    "error": {
+      "no_brands": "Vyberte alebo zadajte aspoň jednu značku."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Akcie na pivo – nastavenie ({country})",
+        "data": {
+          "language": "Jazyk textov v senzoroch",
+          "brands": "Značky piva",
+          "packaging": "Obal piva",
+          "include_unknown_packaging": "Zahrnúť akcie, pri ktorých sa obal nedá rozpoznať",
+          "degrees": "Stupňovitosť",
+          "include_unknown_degree": "Zahrnúť akcie, pri ktorých sa stupeň nedá rozpoznať",
+          "sources": "Zdroje akcií",
+          "custom_urls": "Vlastné URL stránok s akciami (jedna na riadok)",
+          "location_entity": "Poloha (osoba / telefón / zóna) – prázdne = domov HA",
+          "update_time": "Čas dennej kontroly",
+          "update_interval_hours": "Navyše kontrolovať každých N hodín (0 = iba denne)",
+          "top_count": "Koľko najlacnejších ponúk zobraziť",
+          "sort_by": "Zoradiť podľa",
+          "max_distance_km": "Hľadať predajne do vzdialenosti",
+          "require_nearby_store": "Zobraziť iba obchody, ktoré majú predajňu v okolí",
+          "price_alert": "Upozorniť, keď 0,5 l stojí menej ako",
+          "include_upcoming": "Zahrnúť aj akcie, ktoré ešte len začnú",
+          "exclude_loyalty": "Vynechať akcie iba s vernostnou kartou/aplikáciou",
+          "exclude_nonalcoholic": "Vynechať nealko pivo",
+          "max_pages": "Max. počet stránok kupi.cz na stiahnutie"
+        },
+        "data_description": {
+          "language": "Jazyk štítkov akcií, textu „Nie je v akcii“ a zhrnutí. Automaticky = podľa jazyka Home Assistantu.",
+          "custom_urls": "Voliteľné. Do adresy možno vložiť zástupný znak query (hľadaná značka) alebo slug (značka v tvare zlaty-bazant) v zložených zátvorkách – príklady sú v README.",
+          "packaging": "Obal sa rozpozná z názvu akcie (plech, plechovka, fľaša, sklo, PET…). Pivo od 1 l sa berie ako PET.",
+          "include_unknown_packaging": "Letáky obal často neuvádzajú. Vypnutím zobrazíte iba akcie, kde je obal isto uvedený.",
+          "degrees": "Stupeň sa rozpozná z názvu akcie (Zlatý Bažant 12%, Kozel 11, 10°, desiatka…). Pri známych pivách bez čísla v názve sa doplní, napr. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "Keď je vypnuté, zobrazia sa iba akcie, pri ktorých je stupňovitosť isto známa."
+        }
+      }
+    },
+    "error": {
+      "no_brands": "Vyberte alebo zadajte aspoň jednu značku."
+    }
+  },
+  "selector": {
+    "sort_by": {
+      "options": {
+        "unit": "Cena za 0,5 l (najvýhodnejšie)",
+        "price": "Cena za balenie",
+        "distance": "Najbližší obchod"
+      }
+    },
+    "packaging": {
+      "options": {
+        "glass": "🍾 Sklo (fľaša)",
+        "can": "🥫 Plech (plechovka)",
+        "pet": "🧴 PET fľaša"
+      }
+    },
+    "degrees": {
+      "options": {
+        "10": "10° (desiatka)",
+        "11": "11° (jedenástka)",
+        "12": "12° (dvanástka)",
+        "other": "Ostatné (výčapné 7–9°, špeciály 13° a viac)"
+      }
+    },
+    "language": {
+      "options": {
+        "auto": "Automaticky (podľa jazyka HA)",
+        "cs": "Čeština",
+        "sk": "Slovenčina",
+        "en": "English"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cheapest": {
+        "name": "Najlacnejšie pivo"
+      },
+      "per_half_liter": {
+        "name": "Najlacnejšie pivo za 0,5 l"
+      },
+      "count": {
+        "name": "Počet akcií"
+      },
+      "rank": {
+        "name": "Pivo #{rank}"
+      },
+      "brand": {
+        "name": "{brand}"
+      },
+      "where": {
+        "name": "Kam po pivo"
+      },
+      "where_brand": {
+        "name": "Kam po {brand}"
+      }
+    },
+    "binary_sensor": {
+      "cheap_beer": {
+        "name": "Lacné pivo pod limitom"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Aktualizovať akcie"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Aktualizovať",
+      "description": "Okamžite znova stiahne akcie na pivo."
+    }
+  }
+}

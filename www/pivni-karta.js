@@ -12,7 +12,7 @@
  *   3. do dashboardu přidejte kartu "Pivní karta" (type: custom:pivni-karta)
  */
 
-const PIVNI_KARTA_VERSION = "1.3.0";
+const PIVNI_KARTA_VERSION = "1.4.0";
 
 console.info(
   `%c 🍺 PIVNI-KARTA %c v${PIVNI_KARTA_VERSION} `,
@@ -22,24 +22,69 @@ console.info(
 
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 const ALL = "__all__";
-const DEGREES = { "10": "10°", "11": "11°", "12": "12°", other: "Ostatní" };
+// Texty karty – čeština, slovenčina, angličtina
+const I18N = {
+  cs: {
+    title: "Kam na pivo", updated: "aktualizováno", waiting: "čekám na data…", all: "Vše",
+    any_pack: "Každý obal", any_degree: "Každý stupeň", not_on_sale: "Není v akci",
+    go: "Dnes jdi do", sorry: "Bohužel", selected_beer: "Vybrané pivo", now_not_on_sale: "teď není v akci 😢",
+    navigate: "Navigovat", map: "Mapa", leaflet: "Leták", ranking: "🏆 Nejlevnější akce",
+    loyalty_only: "jen s kartou", online: "online obchod", refresh: "Aktualizovat akce",
+    glass: "Sklo", can: "Plech", pet: "PET", other: "Ostatní", brand_select: "Výběr značky",
+    all_brands: "Všechny značky", need_entity: "Zadejte entitu – senzor „Nejlevnější pivo“ z integrace Akce na pivo",
+    not_found: "Entita nenalezena",
+  },
+  sk: {
+    title: "Kam na pivo", updated: "aktualizované", waiting: "čakám na dáta…", all: "Všetko",
+    any_pack: "Každý obal", any_degree: "Každý stupeň", not_on_sale: "Nie je v akcii",
+    go: "Dnes choď do", sorry: "Bohužiaľ", selected_beer: "Vybrané pivo", now_not_on_sale: "teraz nie je v akcii 😢",
+    navigate: "Navigovať", map: "Mapa", leaflet: "Leták", ranking: "🏆 Najlacnejšie akcie",
+    loyalty_only: "len s kartou", online: "online obchod", refresh: "Aktualizovať akcie",
+    glass: "Sklo", can: "Plech", pet: "PET", other: "Ostatné", brand_select: "Výber značky",
+    all_brands: "Všetky značky", need_entity: "Zadajte entitu – senzor „Najlacnejšie pivo“ z integrácie Akcie na pivo",
+    not_found: "Entita sa nenašla",
+  },
+  en: {
+    title: "Where to buy beer", updated: "updated", waiting: "waiting for data…", all: "All",
+    any_pack: "Any packaging", any_degree: "Any degree", not_on_sale: "Not on sale",
+    go: "Today go to", sorry: "Sorry", selected_beer: "Selected beer", now_not_on_sale: "is not on sale now 😢",
+    navigate: "Navigate", map: "Map", leaflet: "Flyer", ranking: "🏆 Cheapest deals",
+    loyalty_only: "loyalty card only", online: "online shop", refresh: "Refresh deals",
+    glass: "Glass", can: "Can", pet: "PET", other: "Other", brand_select: "Brand",
+    all_brands: "All brands", need_entity: "Set the entity – the “Cheapest beer” sensor of the Akce na pivo integration",
+    not_found: "Entity not found",
+  },
+};
+const LOCALES = { cs: "cs-CZ", sk: "sk-SK", en: "en-GB" };
+const pickLang = (...candidates) => {
+  for (const c of candidates) {
+    const base = String(c || "").toLowerCase().split("-")[0];
+    if (I18N[base]) return base;
+  }
+  return "cs";
+};
+// v editoru ještě nemáme data – jazyk podle HA
+let EDITOR_LANG = "cs";
+
+const DEGREES = { "10": "10°", "11": "11°", "12": "12°", other: "other" };
+const BRAND_CHIPS_MAX = 6;
 const degreeGroup = (d) => (d == null ? null : [10, 11, 12].includes(Number(d)) ? String(d) : "other");
 const PACKAGING = {
-  glass: { icon: "🍾", label: "Sklo" },
-  can: { icon: "🥫", label: "Plech" },
-  pet: { icon: "🧴", label: "PET" },
+  glass: { icon: "🍾", label: "glass" },
+  can: { icon: "🥫", label: "can" },
+  pet: { icon: "🧴", label: "pet" },
 };
 
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-const fmt = (value, symbol) =>
+const fmt = (value, symbol, locale = "cs-CZ") =>
   value === null || value === undefined || value === ""
     ? "–"
-    : `${Number(value).toLocaleString("cs-CZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+    : `${Number(value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
 
-const km = (value) =>
-  value === null || value === undefined ? "" : `${Number(value).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} km`;
+const km = (value, locale = "cs-CZ") =>
+  value === null || value === undefined ? "" : `${Number(value).toLocaleString(locale, { maximumFractionDigits: 1 })} km`;
 
 const shortDate = (iso) => {
   if (!iso) return "";
@@ -69,9 +114,8 @@ class PivniKarta extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.entity) throw new Error("Zadejte entitu – senzor „Nejlevnější pivo“ z integrace Akce na pivo");
+    if (!config || !config.entity) throw new Error(I18N[pickLang(config?.language, navigator.language)].need_entity);
     this._config = {
-      title: "Kam na pivo",
       count: 5,
       show_map: true,
       show_list: true,
@@ -85,6 +129,7 @@ class PivniKarta extends HTMLElement {
     this._brand = this._config.brand || null;
     this._packaging = this._config.packaging || null;
     this._degree = this._config.degree ? String(this._config.degree) : null;
+    this._picked = null;
     this._lastKey = "";
     if (this._hass) this._render();
   }
@@ -105,6 +150,22 @@ class PivniKarta extends HTMLElement {
 
   getGridOptions() {
     return { columns: 12, min_columns: 6, rows: "auto" };
+  }
+
+  _lang() {
+    return pickLang(this._config?.language, this._attrs().language, this._hass?.language, this._attrs().country === "SK" ? "sk" : "");
+  }
+
+  _t(key) {
+    return I18N[this._lang()][key] ?? I18N.cs[key] ?? key;
+  }
+
+  _packLabel(kind) {
+    return PACKAGING[kind] ? this._t(PACKAGING[kind].label) : "";
+  }
+
+  _degreeLabel(kind) {
+    return kind === "other" ? this._t("other") : DEGREES[kind] || "";
   }
 
   _attrs() {
@@ -130,12 +191,17 @@ class PivniKarta extends HTMLElement {
     if (!this._config || !this._hass) return;
     const stateObj = this._hass.states[this._config.entity];
     if (!stateObj) {
-      this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card><div class="beer"><div class="empty">Entita ${esc(this._config.entity)} nenalezena</div></div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card><div class="beer"><div class="empty">${this._t("not_found")}: ${esc(this._config.entity)}</div></div></ha-card>`;
       return;
     }
     const attrs = this._attrs();
     const symbol = attrs.currency_symbol || "Kč";
-    const { best, list } = this._selection(attrs);
+    const locale = LOCALES[this._lang()];
+    this._locale = locale;
+    const selection = this._selection(attrs);
+    const list = selection.list;
+    // klepnutím na akci v žebříčku se ukáže nahoře
+    const best = (this._picked && list.find((o) => this._offerKey(o) === this._picked)) || selection.best;
     const notOnSale = attrs.not_on_sale || [];
     const brandNames = [...Object.keys(attrs.brands || {}), ...notOnSale.filter((b) => !(attrs.brands || {})[b])];
     const degKinds = Object.keys(DEGREES).filter(
@@ -160,36 +226,43 @@ class PivniKarta extends HTMLElement {
         ${bubbles}
         <div class="foam">
           <div class="head">
-            <div class="title">🍺 ${esc(this._config.title)} ${attrs.country ? FLAGS[attrs.country] || "" : ""}</div>
-            <button class="refresh" title="Aktualizovat akce" aria-label="Aktualizovat akce"><ha-icon icon="mdi:refresh"></ha-icon></button>
+            <div class="title">🍺 ${esc(this._config.title || this._t("title"))} ${attrs.country ? FLAGS[attrs.country] || "" : ""}</div>
+            <button class="refresh" title="${this._t("refresh")}" aria-label="${this._t("refresh")}"><ha-icon icon="mdi:refresh"></ha-icon></button>
           </div>
-          <div class="sub">${updated ? `aktualizováno ${updated.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : "čekám na data…"}</div>
+          <div class="sub">${updated ? `${this._t("updated")} ${updated.toLocaleString(locale, { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : this._t("waiting")}</div>
         </div>
 
         <div class="content">
-          ${this._config.show_brands && brandNames.length > 1 ? `
-            <div class="brands" role="tablist">
-              <button class="chip ${!this._brand || this._brand === ALL ? "on" : ""}" data-brand="${ALL}">Vše</button>
-              ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""} ${notOnSale.includes(b) ? "off" : ""}" data-brand="${esc(b)}" ${notOnSale.includes(b) ? 'title="Není v akci"' : ""}>${esc(b)}</button>`).join("")}
+          ${this._config.show_brands && brandNames.length > 1 && brandNames.length > BRAND_CHIPS_MAX ? `
+            <div class="brands">
+              <select class="brand-select" aria-label="${this._t("brand_select")}">
+                <option value="${ALL}" ${!this._brand || this._brand === ALL ? "selected" : ""}>${this._t("all_brands")} (${brandNames.length})</option>
+                ${brandNames.map((b) => `<option value="${esc(b)}" ${this._brand === b ? "selected" : ""}>${esc(b)}${notOnSale.includes(b) ? ` – ${this._t("not_on_sale").toLowerCase()}` : ""}</option>`).join("")}
+              </select>
             </div>` : ""}
-          ${notOnSale.length && (!this._brand || this._brand === ALL) ? `<div class="nosale">❌ Není v akci: ${notOnSale.map(esc).join(", ")}</div>` : ""}
+          ${this._config.show_brands && brandNames.length > 1 && brandNames.length <= BRAND_CHIPS_MAX ? `
+            <div class="brands" role="tablist">
+              <button class="chip ${!this._brand || this._brand === ALL ? "on" : ""}" data-brand="${ALL}">${this._t("all")}</button>
+              ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""} ${notOnSale.includes(b) ? "off" : ""}" data-brand="${esc(b)}" ${notOnSale.includes(b) ? `title="${this._t("not_on_sale")}"` : ""}>${esc(b)}</button>`).join("")}
+            </div>` : ""}
+          ${notOnSale.length && (!this._brand || this._brand === ALL) ? `<div class="nosale">❌ ${this._t("not_on_sale")}: ${notOnSale.map(esc).join(", ")}</div>` : ""}
           ${this._config.show_packaging && packKinds.length ? `
             <div class="brands packs" role="tablist">
-              <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">Každý obal</button>
-              ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${PACKAGING[k].label}</button>`).join("")}
+              <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">${this._t("any_pack")}</button>
+              ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${this._packLabel(k)}</button>`).join("")}
             </div>` : ""}
           ${this._config.show_degrees && degKinds.length ? `
             <div class="brands packs" role="tablist">
-              <button class="chip ${!this._degree || this._degree === ALL ? "on" : ""}" data-deg="${ALL}">Každý stupeň</button>
-              ${degKinds.map((k) => `<button class="chip ${this._degree === k ? "on" : ""}" data-deg="${k}">${DEGREES[k]}</button>`).join("")}
+              <button class="chip ${!this._degree || this._degree === ALL ? "on" : ""}" data-deg="${ALL}">${this._t("any_degree")}</button>
+              ${degKinds.map((k) => `<button class="chip ${this._degree === k ? "on" : ""}" data-deg="${k}">${this._degreeLabel(k)}</button>`).join("")}
             </div>` : ""}
 
-          ${best ? this._hero(best, symbol) : `<div class="hero nosale-hero"><div class="go">Bohužel</div><div class="shop">${this._brand && this._brand !== ALL ? esc(this._brand) : "Vybrané pivo"}${this._packaging && this._packaging !== ALL ? ` (${PACKAGING[this._packaging]?.label.toLowerCase() || ""})` : ""}${this._degree && this._degree !== ALL ? ` ${DEGREES[this._degree] || ""}` : ""}</div><div class="where">teď není v akci 😢</div></div>`}
+          ${best ? this._hero(best, symbol) : `<div class="hero nosale-hero"><div class="go">${this._t("sorry")}</div><div class="shop">${this._brand && this._brand !== ALL ? esc(this._brand) : this._t("selected_beer")}${this._packaging && this._packaging !== ALL ? ` (${this._packLabel(this._packaging).toLowerCase()})` : ""}${this._degree && this._degree !== ALL ? ` ${this._degreeLabel(this._degree)}` : ""}</div><div class="where">${this._t("now_not_on_sale")}</div></div>`}
 
           ${best && this._config.show_map && best.latitude != null ? this._map(best) : ""}
 
           ${this._config.show_list && list.length > 1 ? `
-            <div class="section">🏆 Nejlevnější akce</div>
+            <div class="section">${this._t("ranking")}</div>
             <div class="list">${list.slice(0, count).map((o, i) => this._row(o, i, symbol, o === best)).join("")}</div>` : ""}
         </div>
       </div></ha-card>`;
@@ -199,10 +272,31 @@ class PivniKarta extends HTMLElement {
     );
     this.shadowRoot.querySelectorAll(".brands .chip").forEach((chip) =>
       chip.addEventListener("click", () => {
+        this._picked = null;
         if (chip.dataset.brand) this._brand = chip.dataset.brand;
         if (chip.dataset.pack) this._packaging = chip.dataset.pack;
         if (chip.dataset.deg) this._degree = chip.dataset.deg;
         this._render();
+      })
+    );
+    this._bindExtra();
+  }
+
+  _offerKey(o) {
+    return `${o.shop}|${o.product}|${o.price}`;
+  }
+
+  _bindExtra() {
+    this.shadowRoot.querySelector(".brand-select")?.addEventListener("change", (ev) => {
+      this._brand = ev.target.value;
+      this._picked = null;
+      this._render();
+    });
+    this.shadowRoot.querySelectorAll(".list .row[data-key]").forEach((row) =>
+      row.addEventListener("click", () => {
+        this._picked = row.dataset.key;
+        this._render();
+        this.shadowRoot.querySelector(".hero")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       })
     );
   }
@@ -216,11 +310,11 @@ class PivniKarta extends HTMLElement {
     return `
       <div class="hero">
         ${o.discount_percent ? `<div class="badge">−${Number(o.discount_percent)} %</div>` : ""}
-        <div class="go">Dnes jdi do</div>
+        <div class="go">${this._t("go")}</div>
         <div class="shop">${esc(shop)}</div>
         <div class="where">
-          ${o.address ? `<ha-icon icon="mdi:map-marker"></ha-icon>${esc(o.address)}` : o.online ? "online obchod" : ""}
-          ${o.distance_km != null ? `<span class="dist">${km(o.distance_km)}</span>` : ""}
+          ${o.address ? `<ha-icon icon="mdi:map-marker"></ha-icon>${esc(o.address)}` : o.online ? this._t("online") : ""}
+          ${o.distance_km != null ? `<span class="dist">${km(o.distance_km, this._locale)}</span>` : ""}
         </div>
         ${o.opening_hours ? `<div class="hours"><ha-icon icon="mdi:clock-outline"></ha-icon>${esc(o.opening_hours)}</div>` : ""}
         <div class="deal">
@@ -228,20 +322,20 @@ class PivniKarta extends HTMLElement {
             ${o.image ? `<img src="${esc(o.image)}" alt="" loading="lazy">` : `<div class="mug">🍺</div>`}
             <div>
               <div class="pname">${esc(o.product)}</div>
-              <div class="pmeta">${o.degree ? `<b>${Number(o.degree)}°</b> · ` : ""}${PACKAGING[o.packaging] ? `${PACKAGING[o.packaging].icon} ${PACKAGING[o.packaging].label} · ` : ""}${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? " · jen s kartou" : ""}</div>
+              <div class="pmeta">${o.degree ? `<b>${Number(o.degree)}°</b> · ` : ""}${PACKAGING[o.packaging] ? `${PACKAGING[o.packaging].icon} ${this._packLabel(o.packaging)} · ` : ""}${o.amount ? esc(o.amount) : ""}${validity ? ` · ${validity}` : ""}${o.loyalty ? ` · ${this._t("loyalty_only")}` : ""}</div>
             </div>
           </div>
           <div class="price">
-            <div class="big">${fmt(o.price, symbol)}</div>
-            ${o.old_price ? `<div class="old">${fmt(o.old_price, symbol)}</div>` : ""}
-            ${o.price_per_half_liter ? `<div class="unit">${fmt(o.price_per_half_liter, symbol)} / 0,5 l</div>` : ""}
+            <div class="big">${fmt(o.price, symbol, this._locale)}</div>
+            ${o.old_price ? `<div class="old">${fmt(o.old_price, symbol, this._locale)}</div>` : ""}
+            ${o.price_per_half_liter ? `<div class="unit">${fmt(o.price_per_half_liter, symbol, this._locale)} / 0,5 l</div>` : ""}
           </div>
         </div>
         ${flags ? `<div class="tags">${flags}</div>` : ""}
         <div class="actions">
-          ${o.navigate_url ? `<a class="btn primary" href="${esc(o.navigate_url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:navigation-variant"></ha-icon>Navigovat</a>` : ""}
-          ${o.map_url ? `<a class="btn" href="${esc(o.map_url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:map"></ha-icon>Mapa</a>` : ""}
-          ${o.url ? `<a class="btn" href="${esc(o.url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:newspaper-variant-outline"></ha-icon>Leták</a>` : ""}
+          ${o.navigate_url ? `<a class="btn primary" href="${esc(o.navigate_url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:navigation-variant"></ha-icon>${this._t("navigate")}</a>` : ""}
+          ${o.map_url ? `<a class="btn" href="${esc(o.map_url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:map"></ha-icon>${this._t("map")}</a>` : ""}
+          ${o.url ? `<a class="btn" href="${esc(o.url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:newspaper-variant-outline"></ha-icon>${this._t("leaflet")}</a>` : ""}
         </div>
       </div>`;
   }
@@ -254,15 +348,15 @@ class PivniKarta extends HTMLElement {
 
   _row(o, i, symbol, isBest) {
     return `
-      <div class="row ${isBest ? "best" : ""}">
+      <div class="row ${isBest ? "best" : ""}" data-key="${esc(this._offerKey(o))}">
         <div class="rank">${i + 1}</div>
         <div class="info">
           <div class="rname">${esc(o.product)}</div>
-          <div class="rshop">${esc(o.store_name || o.shop)}${o.distance_km != null ? ` · ${km(o.distance_km)}` : ""}</div>
+          <div class="rshop">${esc(o.store_name || o.shop)}${o.distance_km != null ? ` · ${km(o.distance_km, this._locale)}` : ""}</div>
         </div>
         <div class="rprice">
-          <div>${fmt(o.price, symbol)}</div>
-          ${o.price_per_half_liter ? `<small>${fmt(o.price_per_half_liter, symbol)}/0,5 l</small>` : ""}
+          <div>${fmt(o.price, symbol, this._locale)}</div>
+          ${o.price_per_half_liter ? `<small>${fmt(o.price_per_half_liter, symbol, this._locale)}/0,5 l</small>` : ""}
         </div>
       </div>`;
   }
@@ -319,6 +413,11 @@ const STYLE = `
 
   .brands { display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 12px; }
   .brands.packs { margin-top: -4px; }
+  .brand-select {
+    font: inherit; font-weight: 700; color: #3b1f00; background: rgba(255,250,240,.85);
+    border: 0; border-radius: 10px; padding: 7px 10px; box-shadow: inset 0 0 0 1px rgba(90,48,0,.2); max-width: 100%;
+  }
+  .list .row { cursor: pointer; }
   .chip {
     border:0; cursor:pointer; font: inherit; font-size:.82em; font-weight:600;
     padding: 5px 11px; border-radius: 999px; color:#5a3000;
@@ -401,25 +500,42 @@ class PivniKartaEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => EDITOR_LABELS[s.name] || s.name;
+      this._form.computeLabel = (s) => (EDITOR_LABELS[EDITOR_LANG] || EDITOR_LABELS.cs)[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this._config = ev.detail.value;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
       });
       this.appendChild(this._form);
     }
-    const brands = Object.keys(this._hass.states[this._config.entity]?.attributes?.brands || {});
+    const attrs = this._hass.states[this._config.entity]?.attributes || {};
+    EDITOR_LANG = pickLang(this._config.language, attrs.language, this._hass.language);
+    const T = I18N[EDITOR_LANG];
+    const brands = Object.keys(attrs.brands || {});
     this._form.hass = this._hass;
     this._form.schema = [
       { name: "entity", required: true, selector: { entity: { domain: "sensor", integration: "akce_na_pivo" } } },
       { name: "title", selector: { text: {} } },
+      {
+        name: "language",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "", label: "Auto (HA / integrace)" },
+              { value: "cs", label: "Čeština" },
+              { value: "sk", label: "Slovenčina" },
+              { value: "en", label: "English" },
+            ],
+          },
+        },
+      },
       {
         name: "brand",
         selector: {
           select: {
             mode: "dropdown",
             custom_value: true,
-            options: [{ value: "", label: "Všechny značky" }, ...brands.map((b) => ({ value: b, label: b }))],
+            options: [{ value: "", label: T.all_brands }, ...brands.map((b) => ({ value: b, label: b }))],
           },
         },
       },
@@ -428,7 +544,7 @@ class PivniKartaEditor extends HTMLElement {
         selector: {
           select: {
             mode: "dropdown",
-            options: [{ value: "", label: "Každý stupeň" }, ...Object.entries(DEGREES).map(([value, label]) => ({ value, label }))],
+            options: [{ value: "", label: T.any_degree }, ...Object.keys(DEGREES).map((value) => ({ value, label: value === "other" ? T.other : DEGREES[value] }))],
           },
         },
       },
@@ -438,8 +554,8 @@ class PivniKartaEditor extends HTMLElement {
           select: {
             mode: "dropdown",
             options: [
-              { value: "", label: "Každý obal" },
-              ...Object.entries(PACKAGING).map(([value, p]) => ({ value, label: `${p.icon} ${p.label}` })),
+              { value: "", label: T.any_pack },
+              ...Object.entries(PACKAGING).map(([value, p]) => ({ value, label: `${p.icon} ${T[p.label]}` })),
             ],
           },
         },
@@ -459,24 +575,32 @@ class PivniKartaEditor extends HTMLElement {
         ],
       },
     ];
-    this._form.data = { title: "Kam na pivo", count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, show_packaging: true, show_degrees: true, bubbles: true, ...this._config };
+    this._form.data = { count: 5, map_height: 180, show_map: true, show_list: true, show_brands: true, show_packaging: true, show_degrees: true, bubbles: true, ...this._config };
   }
 }
 
 const EDITOR_LABELS = {
-  entity: "Senzor „Nejlevnější pivo“",
-  title: "Nadpis",
-  brand: "Výchozí značka",
-  count: "Počet akcí v žebříčku",
-  map_height: "Výška mapy (px)",
-  show_map: "Mapa obchodu",
-  show_list: "Žebříček nejlevnějších",
-  show_brands: "Přepínač značek",
-  packaging: "Výchozí obal",
-  show_packaging: "Přepínač obalu (sklo / plech / PET)",
-  degree: "Výchozí stupeň",
-  show_degrees: "Přepínač stupně (10° / 11° / 12°)",
-  bubbles: "Bublinky 🫧",
+  cs: {
+    entity: "Senzor „Nejlevnější pivo“", title: "Nadpis (prázdné = výchozí)", language: "Jazyk karty",
+    brand: "Výchozí značka", count: "Počet akcí v žebříčku", map_height: "Výška mapy (px)",
+    show_map: "Mapa obchodu", show_list: "Žebříček nejlevnějších", show_brands: "Přepínač značek",
+    packaging: "Výchozí obal", show_packaging: "Přepínač obalu (sklo / plech / PET)",
+    degree: "Výchozí stupeň", show_degrees: "Přepínač stupně (10° / 11° / 12°)", bubbles: "Bublinky 🫧",
+  },
+  sk: {
+    entity: "Senzor „Najlacnejšie pivo“", title: "Nadpis (prázdne = predvolený)", language: "Jazyk karty",
+    brand: "Predvolená značka", count: "Počet akcií v rebríčku", map_height: "Výška mapy (px)",
+    show_map: "Mapa obchodu", show_list: "Rebríček najlacnejších", show_brands: "Prepínač značiek",
+    packaging: "Predvolený obal", show_packaging: "Prepínač obalu (sklo / plech / PET)",
+    degree: "Predvolený stupeň", show_degrees: "Prepínač stupňa (10° / 11° / 12°)", bubbles: "Bublinky 🫧",
+  },
+  en: {
+    entity: "“Cheapest beer” sensor", title: "Title (empty = default)", language: "Card language",
+    brand: "Default brand", count: "Deals in the ranking", map_height: "Map height (px)",
+    show_map: "Store map", show_list: "Cheapest deals ranking", show_brands: "Brand switcher",
+    packaging: "Default packaging", show_packaging: "Packaging switcher (glass / can / PET)",
+    degree: "Default degree", show_degrees: "Degree switcher (10° / 11° / 12°)", bubbles: "Bubbles 🫧",
+  },
 };
 
 if (!customElements.get("pivni-karta")) customElements.define("pivni-karta", PivniKarta);
@@ -486,8 +610,8 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "pivni-karta")) {
   window.customCards.push({
     type: "pivni-karta",
-    name: "Pivní karta",
-    description: "Kam jít pro nejlevnější pivo – obchod, adresa, cena a mapa na pivním pozadí.",
+    name: "Pivní karta / Pivná karta",
+    description: "Kam jít pro nejlevnější pivo – obchod, adresa, cena a mapa na pivním pozadí (CZ / SK / EN).",
     preview: true,
     documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo#lovelace-karty-slo%C5%BEka-www",
   });

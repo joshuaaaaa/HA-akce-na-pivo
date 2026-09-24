@@ -13,6 +13,8 @@ přidáte ručně (viz [Lovelace karty](#lovelace-karty-složka-www)):
   žebříček akcí a mapa se všemi obchody.
 
 - **Česko 🇨🇿 nebo Slovensko 🇸🇰**: zemi vyberete při přidání integrace.
+- **Čeština, slovenčina, nebo angličtina 🇨🇿 🇸🇰 🇬🇧**: integrace i obě karty jsou přeložené,
+  viz [Jazyk](#jazyk--jazyk--language).
 - Ceny z více webů s letákovými akcemi (Albert, Billa, Globus, Kaufland, Lidl, Penny, Tesco,
   Makro, Norma, COOP, JIP, Hruška, na Slovensku COOP Jednota, Terno, Fresh, Kraj, Metro…).
   Stejná akce nalezená na víc webech se sloučí.
@@ -39,6 +41,20 @@ Při přidání integrace nejdřív zvolíte **zemi**:
   v tomto okruhu od vašeho domova v ČR.
 - Slovenské značky v seznamu: Zlatý Bažant, Šariš, Corgoň, Topvar, Smädný mních, Kelt, Steiger,
   Martiner, Urpiner, Popper (a samozřejmě české značky nebo vlastní).
+
+## Jazyk / Jazyk / Language
+
+- **Průvodce nastavením, názvy entit a služby** jsou česky, slovensky i anglicky
+  (`translations/cs.json`, `sk.json`, `en.json`). Home Assistant je zobrazí podle jazyka
+  v profilu uživatele, u slovenštiny tedy např. „Kam po pivo“ nebo „Najlacnejšie pivo“.
+- **Jazyk textů v senzorech** vyberete hned v prvním kroku přidání integrace (a později
+  v *Konfigurovat*): **Automaticky** (podle jazyka HA), **Čeština**, **Slovenčina**, nebo **English**.
+  Týká se štítků akcí („Zľava 30 %“, „Končí zajtra“…), stavu „Není v akci“ / „Nie je v akcii“ /
+  „Not on sale“ a shrnutí v senzorech *Kam pro pivo*.
+- **Karty** se přizpůsobí samy: jazyk vezmou z integrace, případně z jazyka HA. V editoru
+  karty ho jde nastavit i ručně (`language: sk`).
+
+Slovenský překlad vychází z forku [FARKIr/HA-akce-na-pivo](https://github.com/FARKIr/HA-akce-na-pivo). Díky!
 
 ## Zdroje akcí
 
@@ -157,6 +173,8 @@ např. `/local/pivni-karta.js?v=4`, aby prohlížeč nenačítal starou verzi z 
 - štítky jako „Nejlevněji za posledních 120 dní“ nebo „Končí dnes“,
 - tlačítka **Navigovat**, **Mapa** a **Leták**,
 - **přepínač značek** (Vše / Kozel / Pilsner Urquell…): po klepnutí na značku ukáže, kam jít pro ni.
+  Při více než 6 značkách se místo tlačítek zobrazí rozbalovací seznam.
+- **klepnutí na akci v žebříčku** ji zobrazí nahoře (obchod, adresa, navigace).
   Vybrané značky, na které teď akce není, jsou přeškrtnuté a karta u nich napíše **„teď není v akci“**.
   Ostatní značky se zobrazují normálně.
 - **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“,
@@ -178,6 +196,7 @@ show_map: true       # mapa obchodu (OpenStreetMap)
 map_height: 180
 show_list: true      # žebříček nejlevnějších
 bubbles: true        # animované bublinky (vypnou se i při „omezit pohyb“ v systému)
+language: ""         # "" = podle integrace / HA, nebo cs | sk | en
 ```
 
 ### 🗺️ Seznam akcí s mapou
@@ -203,6 +222,7 @@ show_images: true
 show_address: true
 show_flags: true
 show_source: true   # štítek, ze kterého webu akce pochází
+language: ""        # "" = podle integrace / HA, nebo cs | sk | en
 show_upcoming: false
 ```
 

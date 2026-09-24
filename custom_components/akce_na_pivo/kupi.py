@@ -39,6 +39,31 @@ CZECH_MONTHS = {
     "listopad": 11,
     "prosince": 12,
     "prosinec": 12,
+    # slovensky
+    "januara": 1,
+    "januar": 1,
+    "februara": 2,
+    "februar": 2,
+    "marca": 3,
+    "marec": 3,
+    "aprila": 4,
+    "april": 4,
+    "maja": 5,
+    "maj": 5,
+    "juna": 6,
+    "jun": 6,
+    "jula": 7,
+    "jul": 7,
+    "augusta": 8,
+    "august": 8,
+    "septembra": 9,
+    "september": 9,
+    "oktobra": 10,
+    "oktober": 10,
+    "novembra": 11,
+    "november": 11,
+    "decembra": 12,
+    "december": 12,
 }
 
 _NUM = r"\d+(?:[,.]\d+)?"
@@ -92,7 +117,9 @@ def parse_volume(*texts: str | None) -> tuple[int, float | None]:
             if single.group(2) == "ml":
                 volume /= 1000
             pieces = 1
-            pack = re.search(r"(\d+)\s*(?:ks|kusu|pack|-pack|plechovek|lahvi)\b", text)
+            pack = re.search(
+                r"(\d+)\s*(?:ks|kusu|kusov|pack|-pack|plechovek|plechoviek|lahvi|flias)\b", text
+            )
             if pack:
                 pieces = int(pack.group(1))
             return pieces, volume
@@ -142,12 +169,12 @@ def parse_validity(text: str | None, today: date) -> tuple[date | None, date | N
         return today, today
     if "zitra konci" in norm or "zajtra konci" in norm:
         return today, today + timedelta(days=1)
-    if "plati do" in norm or norm.startswith("do "):
+    if "plati do" in norm or "platnost do" in norm or norm.startswith("do "):
         return today, _partial_date(norm, today)
     both = re.search(r"\bod\s+(.+?)\s+do\s+(.+)", norm)
     if both:
         return _partial_date(both.group(1), today), _partial_date(both.group(2), today)
-    if norm.startswith("od ") or "plati od" in norm:
+    if norm.startswith("od ") or "plati od" in norm or "platnost od" in norm:
         return _partial_date(norm, today), None
     parts = re.split(r"\s+[–-]\s+|\s*[–-]\s*(?=[a-z]{2}\s*\d|\d)", norm, maxsplit=1)
     if len(parts) == 2:
@@ -211,6 +238,9 @@ _DEGREE_WORDS = {
     "desinka": 10,
     "jedenactka": 11,
     "dvanactka": 12,
+    "desiatka": 10,
+    "jedenastka": 11,
+    "dvanastka": 12,
     "vycepni": 10,
     "vycapne": 10,
 }

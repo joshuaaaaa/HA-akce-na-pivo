@@ -3,10 +3,14 @@
     "step": {
       "user": {
         "title": "Akce na pivo",
-        "description": "Name the integration and pick a country. Czechia uses Czech deal sites (CZK), Slovakia uses Slovak ones (EUR). Add the integration twice for both.",
+        "description": "Name the integration, pick the language and country. Czechia uses Czech deal sites (CZK), Slovakia uses Slovak ones (EUR). Add the integration twice for both.",
         "data": {
           "name": "Name",
+          "language": "Language of sensor texts",
           "country": "Country"
+        },
+        "data_description": {
+          "language": "Language of deal labels, the “Not on sale” text and summaries. Automatic = Home Assistant language."
         }
       },
       "settings": {
@@ -51,6 +55,7 @@
       "init": {
         "title": "Beer deals – options ({country})",
         "data": {
+          "language": "Language of sensor texts",
           "brands": "Beer brands",
           "packaging": "Beer packaging",
           "include_unknown_packaging": "Include deals with unknown packaging",
@@ -76,7 +81,8 @@
           "packaging": "Packaging is detected from the deal name (can, bottle, glass, PET…). Beer of 1 l or more is treated as PET.",
           "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated.",
           "degrees": "Detected from the deal name (Kozel 11, 12°, 12%…). Well-known beers without a number are filled in, e.g. Pilsner Urquell = 12°.",
-          "include_unknown_degree": "When off, only deals with a known degree are shown."
+          "include_unknown_degree": "When off, only deals with a known degree are shown.",
+          "language": "Language of deal labels, the “Not on sale” text and summaries. Automatic = Home Assistant language."
         }
       }
     },
@@ -105,6 +111,14 @@
         "11": "11°",
         "12": "12°",
         "other": "Other (7–9°, specials 13°+)"
+      }
+    },
+    "language": {
+      "options": {
+        "auto": "Automatic (HA language)",
+        "cs": "Čeština",
+        "sk": "Slovenčina",
+        "en": "English"
       }
     }
   },

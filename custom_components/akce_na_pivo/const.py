@@ -311,6 +311,7 @@ SOURCES: dict[str, dict] = {
 }
 
 CONF_COUNTRY = "country"
+CONF_LANGUAGE = "language"
 COUNTRY_CZ = "CZ"
 COUNTRY_SK = "SK"
 DEFAULT_COUNTRY = COUNTRY_CZ

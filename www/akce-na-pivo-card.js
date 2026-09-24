@@ -11,9 +11,44 @@
  * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "2.2.0";
+const CARD_VERSION = "2.3.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
-const PACKAGING_ICONS = { glass: "🍾 sklo", can: "🥫 plech", pet: "🧴 PET" };
+// Texty karty – čeština, slovenčina, angličtina
+const I18N = {
+  cs: {
+    title: "🍺 Nejlevnější pivo", sorted: "řazeno", updated: "aktualizace", not_on_sale: "Není v akci",
+    none: "Žádné vybrané pivo teď není v akci 😢", upcoming: "Připravované akce", navigate: "Navigovat",
+    leaflet: "Leták / kupi.cz", home: "Vaše poloha", zoom_in: "Přiblížit", zoom_out: "Oddálit",
+    fit: "Ukázat všechny obchody", refresh: "Aktualizovat", glass: "sklo", can: "plech", pet: "PET",
+    need_entity: "Zadejte entitu (senzor Nejlevnější pivo)", not_found: "Entita nenalezena",
+  },
+  sk: {
+    title: "🍺 Najlacnejšie pivo", sorted: "zoradené", updated: "aktualizácia", not_on_sale: "Nie je v akcii",
+    none: "Žiadne vybrané pivo teraz nie je v akcii 😢", upcoming: "Pripravované akcie", navigate: "Navigovať",
+    leaflet: "Leták", home: "Vaša poloha", zoom_in: "Priblížiť", zoom_out: "Oddialiť",
+    fit: "Ukázať všetky obchody", refresh: "Aktualizovať", glass: "sklo", can: "plech", pet: "PET",
+    need_entity: "Zadajte entitu (senzor Najlacnejšie pivo)", not_found: "Entita sa nenašla",
+  },
+  en: {
+    title: "🍺 Cheapest beer", sorted: "sorted by", updated: "updated", not_on_sale: "Not on sale",
+    none: "None of the selected beers is on sale now 😢", upcoming: "Upcoming deals", navigate: "Navigate",
+    leaflet: "Flyer", home: "Your location", zoom_in: "Zoom in", zoom_out: "Zoom out",
+    fit: "Show all stores", refresh: "Refresh", glass: "glass", can: "can", pet: "PET",
+    need_entity: "Set the entity (Cheapest beer sensor)", not_found: "Entity not found",
+  },
+};
+const LOCALES = { cs: "cs-CZ", sk: "sk-SK", en: "en-GB" };
+const pickLang = (...candidates) => {
+  for (const c of candidates) {
+    const base = String(c || "").toLowerCase().split("-")[0];
+    if (I18N[base]) return base;
+  }
+  return "cs";
+};
+let EDITOR_LANG = "cs";
+const PACKAGING_ICONS = { glass: "🍾", can: "🥫", pet: "🧴" };
+// štítky, které zvýrazníme (podle klíče z integrace; starší verze posílaly jen text)
+const HOT_FLAGS = ["history_min", "below_limit"];
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE = 256;
 
@@ -36,10 +71,10 @@ const project = (lat, lon, z) => {
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-const money = (value, symbol = "Kč") =>
+const money = (value, symbol = "Kč", locale = "cs-CZ") =>
   value === null || value === undefined || value === ""
     ? "–"
-    : `${Number(value).toLocaleString("cs-CZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+    : `${Number(value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
 
 const shortDate = (iso) => {
   if (!iso) return "";
@@ -75,9 +110,8 @@ class AkceNaPivoCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.entity) throw new Error("Zadejte entitu (sensor Nejlevnější pivo)");
+    if (!config || !config.entity) throw new Error(I18N[pickLang(config?.language, navigator.language)].need_entity);
     this._config = {
-      title: "🍺 Nejlevnější pivo",
       count: 5,
       show_map: true,
       show_images: true,
@@ -124,7 +158,7 @@ class AkceNaPivoCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const state = this._hass.states[this._config.entity];
     if (!state) {
-      this.shadowRoot.innerHTML = `<ha-card><div class="warn">Entita ${esc(this._config.entity)} nenalezena</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<ha-card><div class="warn">${this._t("not_found")}: ${esc(this._config.entity)}</div></ha-card>`;
       return;
     }
     const { offers, upcoming, attrs } = this._offers();
@@ -136,19 +170,19 @@ class AkceNaPivoCard extends HTMLElement {
       <ha-card>
         <div class="header">
           <div>
-            <div class="title">${esc(this._config.title)}</div>
+            <div class="title">${esc(this._config.title || this._t("title"))}</div>
             <div class="sub">
-              ${attrs.country ? `${FLAGS[attrs.country] || esc(attrs.country)} ` : ""}${attrs.value_type ? `řazeno: ${esc(attrs.value_type)}` : ""}
-              ${updated ? ` · aktualizace ${updated.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
+              ${attrs.country ? `${FLAGS[attrs.country] || esc(attrs.country)} ` : ""}${attrs.value_type ? `${this._t("sorted")}: ${esc(attrs.value_type)}` : ""}
+              ${updated ? ` · ${this._t("updated")} ${updated.toLocaleString(this._locale(), { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
           </div>
-          <button class="icon-btn" id="refresh" title="Aktualizovat"><ha-icon icon="mdi:refresh"></ha-icon></button>
+          <button class="icon-btn" id="refresh" title="${this._t("refresh")}"><ha-icon icon="mdi:refresh"></ha-icon></button>
         </div>
-        ${(attrs.not_on_sale || []).length ? `<div class="nosale">❌ Není v akci: ${attrs.not_on_sale.map(esc).join(", ")}</div>` : ""}
-        ${offers.length === 0 ? `<div class="empty">Žádné vybrané pivo teď není v akci 😢</div>` : ""}
+        ${(attrs.not_on_sale || []).length ? `<div class="nosale">❌ ${this._t("not_on_sale")}: ${attrs.not_on_sale.map(esc).join(", ")}</div>` : ""}
+        ${offers.length === 0 ? `<div class="empty">${this._t("none")}</div>` : ""}
         ${this._config.show_map && offers.some((o) => o.latitude) ? `<div id="map" style="height:${Number(this._config.map_height) || 240}px"></div>` : ""}
         <div class="list">${offers.map((o, i) => this._row(o, i)).join("")}</div>
-        ${upcoming.length ? `<div class="section">Připravované akce</div><div class="list">${upcoming.map((o, i) => this._row(o, i, true)).join("")}</div>` : ""}
+        ${upcoming.length ? `<div class="section">${this._t("upcoming")}</div><div class="list">${upcoming.map((o, i) => this._row(o, i, true)).join("")}</div>` : ""}
       </ha-card>`;
 
     this.shadowRoot.getElementById("refresh")?.addEventListener("click", () =>
@@ -171,11 +205,11 @@ class AkceNaPivoCard extends HTMLElement {
   _row(o, i, upcoming = false) {
     const cfg = this._config;
     const selected = !upcoming && i === this._selected;
-    const flags = cfg.show_flags ? (o.flags || []).map((f) => `<span class="chip ${/Nejlevněji|Pod limitem/.test(f) ? "hot" : ""}">${esc(f)}</span>`).join("") : "";
+    const flags = cfg.show_flags ? (o.flags || []).map((f, k) => `<span class="chip ${(o.flag_keys ? HOT_FLAGS.includes(o.flag_keys[k]) : /Nejlevněji|Pod limitem/.test(f)) ? "hot" : ""}">${esc(f)}</span>`).join("") : "";
     const where = [
       o.store_name && o.store_name !== o.shop ? esc(o.store_name) : "",
       cfg.show_address && o.address ? esc(o.address) : "",
-      o.distance_km != null ? `<b>${Number(o.distance_km).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} km</b>` : o.online ? "online" : "",
+      o.distance_km != null ? `<b>${Number(o.distance_km).toLocaleString(this._locale(), { maximumFractionDigits: 1 })} km</b>` : o.online ? "online" : "",
     ].filter(Boolean).join(" · ");
     const validity = o.valid_from && o.valid_to
       ? `${shortDate(o.valid_from)} – ${shortDate(o.valid_to)}`
@@ -186,14 +220,14 @@ class AkceNaPivoCard extends HTMLElement {
         ${cfg.show_images && o.image ? `<img class="img" src="${esc(o.image)}" alt="" loading="lazy">` : ""}
         <div class="info">
           <div class="product">${esc(o.product)}</div>
-          <div class="shop">${esc(o.shop)}${o.degree ? ` · <b>${Number(o.degree)}°</b>` : ""}${PACKAGING_ICONS[o.packaging] ? ` · ${PACKAGING_ICONS[o.packaging]}` : ""}${o.amount ? ` · ${esc(o.amount)}` : ""}${o.loyalty ? ` · <ha-icon class="small" icon="mdi:card-account-details-outline"></ha-icon>` : ""}</div>
+          <div class="shop">${esc(o.shop)}${o.degree ? ` · <b>${Number(o.degree)}°</b>` : ""}${PACKAGING_ICONS[o.packaging] ? ` · ${PACKAGING_ICONS[o.packaging]} ${this._t(o.packaging)}` : ""}${o.amount ? ` · ${esc(o.amount)}` : ""}${o.loyalty ? ` · <ha-icon class="small" icon="mdi:card-account-details-outline"></ha-icon>` : ""}</div>
           ${where ? `<div class="where">${where}</div>` : ""}
           ${o.opening_hours && selected ? `<div class="where">🕒 ${esc(o.opening_hours)}</div>` : ""}
           <div class="meta">${validity ? `<span class="valid">${validity}</span>` : ""}${flags}${this._sourceChips(o)}</div>
           ${selected ? `<div class="links">
               ${o.map_url ? `<a href="${esc(o.map_url)}" target="_blank" rel="noopener">Mapy.com</a>` : ""}
-              ${o.navigate_url ? `<a href="${esc(o.navigate_url)}" target="_blank" rel="noopener">Navigovat</a>` : ""}
-              ${o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">Leták / kupi.cz</a>` : ""}
+              ${o.navigate_url ? `<a href="${esc(o.navigate_url)}" target="_blank" rel="noopener">${this._t("navigate")}</a>` : ""}
+              ${o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${this._t("leaflet")}</a>` : ""}
             </div>` : ""}
         </div>
         <div class="prices">
@@ -205,9 +239,22 @@ class AkceNaPivoCard extends HTMLElement {
       </div>`;
   }
 
+  _lang() {
+    const attrs = this._hass?.states[this._config?.entity]?.attributes || {};
+    return pickLang(this._config?.language, attrs.language, this._hass?.language, attrs.country === "SK" ? "sk" : "");
+  }
+
+  _t(key) {
+    return I18N[this._lang()][key] ?? I18N.cs[key] ?? key;
+  }
+
+  _locale() {
+    return LOCALES[this._lang()];
+  }
+
   _money(value) {
     const attrs = this._hass?.states[this._config.entity]?.attributes || {};
-    return money(value, attrs.currency_symbol || "Kč");
+    return money(value, attrs.currency_symbol || "Kč", this._locale());
   }
 
   _sourceChips(o) {
@@ -339,7 +386,7 @@ class AkceNaPivoCard extends HTMLElement {
       const p = project(lat, lon, v.z);
       return `<div class="pin ${cls}" ${index != null ? `data-index="${index}"` : ""} title="${esc(title)}" style="left:${Math.round(p.x - left)}px;top:${Math.round(p.y - top)}px">${label}</div>`;
     };
-    let pins = home ? pin(home.latitude, home.longitude, "home", "🏠", "Vaše poloha") : "";
+    let pins = home ? pin(home.latitude, home.longitude, "home", "🏠", this._t("home")) : "";
     // vybraný obchod kreslíme až nakonec, aby byl nahoře
     const ordered = [...points].sort((a, b) => (a.i === this._selected) - (b.i === this._selected));
     for (const { o, i } of ordered) {
@@ -349,9 +396,9 @@ class AkceNaPivoCard extends HTMLElement {
       <div class="tiles">${tiles}</div>
       ${pins}
       <div class="zoom">
-        <button data-zoom="1" title="Přiblížit">+</button>
-        <button data-zoom="-1" title="Oddálit">−</button>
-        <button data-fit="1" title="Ukázat všechny obchody">⤢</button>
+        <button data-zoom="1" title="${this._t("zoom_in")}">+</button>
+        <button data-zoom="-1" title="${this._t("zoom_out")}">−</button>
+        <button data-fit="1" title="${this._t("fit")}">⤢</button>
       </div>
       <div class="attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>`;
     el.querySelectorAll(".pin[data-index]").forEach((node) =>
@@ -435,7 +482,7 @@ class AkceNaPivoCardEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => LABELS[s.name] || s.name;
+      this._form.computeLabel = (s) => (LABELS[EDITOR_LANG] || LABELS.cs)[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this._config = ev.detail.value;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -443,57 +490,87 @@ class AkceNaPivoCardEditor extends HTMLElement {
       this.appendChild(this._form);
     }
     this._form.hass = this._hass;
-    this._form.schema = EDITOR_SCHEMA;
+    const attrs = this._hass.states[this._config.entity]?.attributes || {};
+    EDITOR_LANG = pickLang(this._config.language, attrs.language, this._hass.language);
+    this._form.schema = editorSchema(EDITOR_LANG);
     this._form.data = { count: 5, show_map: true, show_images: true, show_flags: true, show_address: true, show_source: true, map_height: 240, ...this._config };
   }
 }
 
 const LABELS = {
-  entity: "Entita (senzor Nejlevnější pivo)",
-  title: "Nadpis",
-  count: "Počet zobrazených nabídek",
-  sort: "Řazení v kartě",
-  show_map: "Zobrazit mapu",
-  map_height: "Výška mapy (px)",
-  show_images: "Obrázky produktů",
-  show_address: "Adresa obchodu",
-  show_flags: "Štítky (sleva, historické minimum…)",
-  show_source: "Zdroj akce (Kupi, Kompas Slev…)",
-  show_upcoming: "Zobrazit připravované akce",
+  cs: {
+    entity: "Entita (senzor Nejlevnější pivo)", title: "Nadpis (prázdné = výchozí)", language: "Jazyk karty",
+    count: "Počet zobrazených nabídek", sort: "Řazení v kartě", show_map: "Zobrazit mapu",
+    map_height: "Výška mapy (px)", show_images: "Obrázky produktů", show_address: "Adresa obchodu",
+    show_flags: "Štítky (sleva, historické minimum…)", show_source: "Zdroj akce (Kupi, Kompas Slev…)",
+    show_upcoming: "Zobrazit připravované akce",
+  },
+  sk: {
+    entity: "Entita (senzor Najlacnejšie pivo)", title: "Nadpis (prázdne = predvolený)", language: "Jazyk karty",
+    count: "Počet zobrazených ponúk", sort: "Zoradenie v karte", show_map: "Zobraziť mapu",
+    map_height: "Výška mapy (px)", show_images: "Obrázky produktov", show_address: "Adresa obchodu",
+    show_flags: "Štítky (zľava, historické minimum…)", show_source: "Zdroj akcie (Zlacnene, Kimbino…)",
+    show_upcoming: "Zobraziť pripravované akcie",
+  },
+  en: {
+    entity: "Entity (Cheapest beer sensor)", title: "Title (empty = default)", language: "Card language",
+    count: "Number of deals shown", sort: "Sorting in the card", show_map: "Show map",
+    map_height: "Map height (px)", show_images: "Product images", show_address: "Store address",
+    show_flags: "Labels (discount, historic low…)", show_source: "Deal source (Kupi, Kompas Slev…)",
+    show_upcoming: "Show upcoming deals",
+  },
 };
 
-const EDITOR_SCHEMA = [
-  { name: "entity", required: true, selector: { entity: { domain: "sensor", integration: "akce_na_pivo" } } },
-  { name: "title", selector: { text: {} } },
-  {
-    type: "grid",
-    name: "",
-    schema: [
-      { name: "count", selector: { number: { min: 1, max: 10, mode: "box" } } },
-      {
-        name: "sort",
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: [
-              { value: "", label: "Podle integrace" },
-              { value: "unit", label: "Cena za 0,5 l" },
-              { value: "price", label: "Cena za balení" },
-              { value: "distance", label: "Vzdálenost" },
-            ],
-          },
+const SORT_LABELS = {
+  cs: ["Podle integrace", "Cena za 0,5 l", "Cena za balení", "Vzdálenost"],
+  sk: ["Podľa integrácie", "Cena za 0,5 l", "Cena za balenie", "Vzdialenosť"],
+  en: ["As in the integration", "Price per 0.5 l", "Package price", "Distance"],
+};
+
+const editorSchema = (lang) => {
+  const sorts = SORT_LABELS[lang] || SORT_LABELS.cs;
+  return [
+    { name: "entity", required: true, selector: { entity: { domain: "sensor", integration: "akce_na_pivo" } } },
+    { name: "title", selector: { text: {} } },
+    {
+      name: "language",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "", label: "Auto (HA / integrace)" },
+            { value: "cs", label: "Čeština" },
+            { value: "sk", label: "Slovenčina" },
+            { value: "en", label: "English" },
+          ],
         },
       },
-      { name: "show_map", selector: { boolean: {} } },
-      { name: "map_height", selector: { number: { min: 120, max: 600, step: 10, mode: "box" } } },
-      { name: "show_images", selector: { boolean: {} } },
-      { name: "show_address", selector: { boolean: {} } },
-      { name: "show_flags", selector: { boolean: {} } },
-      { name: "show_source", selector: { boolean: {} } },
-      { name: "show_upcoming", selector: { boolean: {} } },
-    ],
-  },
-];
+    },
+    {
+      type: "grid",
+      name: "",
+      schema: [
+        { name: "count", selector: { number: { min: 1, max: 10, mode: "box" } } },
+        {
+          name: "sort",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: ["", "unit", "price", "distance"].map((value, i) => ({ value, label: sorts[i] })),
+            },
+          },
+        },
+        { name: "show_map", selector: { boolean: {} } },
+        { name: "map_height", selector: { number: { min: 120, max: 600, step: 10, mode: "box" } } },
+        { name: "show_images", selector: { boolean: {} } },
+        { name: "show_address", selector: { boolean: {} } },
+        { name: "show_flags", selector: { boolean: {} } },
+        { name: "show_source", selector: { boolean: {} } },
+        { name: "show_upcoming", selector: { boolean: {} } },
+      ],
+    },
+  ];
+};
 
 if (!customElements.get("akce-na-pivo-card")) customElements.define("akce-na-pivo-card", AkceNaPivoCard);
 if (!customElements.get("akce-na-pivo-card-editor")) customElements.define("akce-na-pivo-card-editor", AkceNaPivoCardEditor);
@@ -503,7 +580,7 @@ if (!window.customCards.some((c) => c.type === "akce-na-pivo-card")) {
   window.customCards.push({
     type: "akce-na-pivo-card",
     name: "Akce na pivo",
-    description: "Nejlevnější pivo v akci – seznam obchodů, ceny a mapa.",
+    description: "Nejlevnější pivo v akci – seznam obchodů, ceny a mapa (CZ / SK / EN).",
     preview: true,
     documentationURL: "https://github.com/joshuaaaaa/HA-akce-na-pivo#lovelace-karty-slo%C5%BEka-www",
   });

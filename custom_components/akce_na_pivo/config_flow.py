@@ -21,6 +21,7 @@ from .const import (
     CONF_INCLUDE_UNKNOWN_DEGREE,
     CONF_INCLUDE_UNKNOWN_PACKAGING,
     CONF_INCLUDE_UPCOMING,
+    CONF_LANGUAGE,
     CONF_LOCATION_ENTITY,
     CONF_MAX_DISTANCE_KM,
     CONF_MAX_PAGES,
@@ -58,12 +59,28 @@ from .const import (
     SOURCES,
     country_sources,
 )
+from .texts import LANGUAGE_AUTO, LANGUAGE_OPTIONS
+
+
+def _language_field(values: dict[str, Any]) -> dict[Any, Any]:
+    return {
+        vol.Required(
+            CONF_LANGUAGE, default=values.get(CONF_LANGUAGE, LANGUAGE_AUTO)
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=LANGUAGE_OPTIONS,
+                translation_key=CONF_LANGUAGE,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+    }
 
 
 def _country_schema(values: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=values.get(CONF_NAME, NAME)): str,
+            **_language_field(values),
             vol.Required(
                 CONF_COUNTRY, default=values.get(CONF_COUNTRY, DEFAULT_COUNTRY)
             ): selector.SelectSelector(
@@ -81,17 +98,18 @@ def _country_schema(values: dict[str, Any]) -> vol.Schema:
     )
 
 
-def _schema(values: dict[str, Any], country: str) -> vol.Schema:
+def _schema(values: dict[str, Any], country: str, with_language: bool = False) -> vol.Schema:
     info = COUNTRIES[country]
     sources = country_sources(country)
-    brand_options = [selector.SelectOptionDict(value=ALL_BRANDS, label="🍺 Všechna piva v akci")]
+    all_label = "🍺 Všetky pivá v akcii" if country == "SK" else "🍺 Všechna piva v akci"
+    brand_options = [selector.SelectOptionDict(value=ALL_BRANDS, label=all_label)]
     brand_options += [selector.SelectOptionDict(value=b, label=b) for b in KNOWN_BRANDS]
     # vlastní značky zadané dříve musí zůstat mezi možnostmi
     for brand in values.get(CONF_BRANDS, []):
         if brand != ALL_BRANDS and brand not in KNOWN_BRANDS:
             brand_options.append(selector.SelectOptionDict(value=brand, label=brand))
 
-    fields: dict[Any, Any] = {}
+    fields: dict[Any, Any] = _language_field(values) if with_language else {}
 
     location = values.get(CONF_LOCATION_ENTITY)
     fields.update(
@@ -274,12 +292,14 @@ class AkceNaPivoConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._title = NAME
         self._country = DEFAULT_COUNTRY
+        self._language = LANGUAGE_AUTO
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Krok 1: název a země (Česko / Slovensko)."""
         if user_input is not None:
             self._title = user_input.get(CONF_NAME) or NAME
             self._country = user_input.get(CONF_COUNTRY) or DEFAULT_COUNTRY
+            self._language = user_input.get(CONF_LANGUAGE) or LANGUAGE_AUTO
             return await self.async_step_settings()
         return self.async_show_form(step_id="user", data_schema=_country_schema({}))
 
@@ -290,6 +310,7 @@ class AkceNaPivoConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             data = _clean(user_input, self._country)
+            data[CONF_LANGUAGE] = self._language
             if not data[CONF_BRANDS]:
                 errors[CONF_BRANDS] = "no_brands"
             else:
@@ -323,7 +344,7 @@ class AkceNaPivoOptionsFlow(OptionsFlow):
         values = {**current, **(user_input or {})}
         return self.async_show_form(
             step_id="init",
-            data_schema=_schema(values, country),
+            data_schema=_schema(values, country, with_language=True),
             errors=errors,
             description_placeholders={"country": COUNTRIES[country]["name"]},
         )

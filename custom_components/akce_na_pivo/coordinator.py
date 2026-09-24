@@ -30,6 +30,7 @@ from .const import (
     CONF_INCLUDE_UNKNOWN_DEGREE,
     CONF_INCLUDE_UNKNOWN_PACKAGING,
     CONF_INCLUDE_UPCOMING,
+    CONF_LANGUAGE,
     CONF_LOCATION_ENTITY,
     CONF_MAX_DISTANCE_KM,
     CONF_MAX_PAGES,
@@ -80,6 +81,7 @@ from .stores import (
     nearest_store,
     reverse_geocode,
 )
+from .texts import resolve_language, text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,9 +90,14 @@ STORE_RETRY_MINUTES = 30
 NOMINATIM_DELAY = 1.1  # limit Nominatimu 1 dotaz/s
 DEAD_URL_DAYS = 7
 
+# slovenské weby dostanou slovenštinu, české češtinu
+ACCEPT_LANGUAGE = {
+    "CZ": "cs-CZ,cs;q=0.9,sk;q=0.8,en;q=0.7",
+    "SK": "sk-SK,sk;q=0.9,cs;q=0.8,en;q=0.7",
+}
+
 HTTP_HEADERS = {
     "User-Agent": USER_AGENT,
-    "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
@@ -155,6 +162,13 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def currency_symbol(self) -> str:
         return self.country_info["symbol"]
+
+    @property
+    def language(self) -> str:
+        """Jazyk textů v senzorech (štítky, „Není v akci“…)."""
+        return resolve_language(
+            self.options.get(CONF_LANGUAGE), self.hass.config.language, self.country
+        )
 
     @property
     def price_alert(self) -> float:
@@ -241,7 +255,9 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _fetch_html(self, url: str) -> tuple[int, str | None]:
         try:
             async with self.session.get(
-                url, headers=HTTP_HEADERS, timeout=aiohttp.ClientTimeout(total=30)
+                url,
+                headers={**HTTP_HEADERS, "Accept-Language": ACCEPT_LANGUAGE[self.country]},
+                timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status >= 400:
                     return resp.status, None
@@ -550,6 +566,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _evaluate(self, offers: list[dict[str, Any]], today: date) -> None:
         history: dict[str, dict[str, float]] = self._cache["history"]
         alert = self.price_alert
+        lang = self.language
         symbol = self.currency_symbol
         cutoff = (today - timedelta(days=HISTORY_DAYS)).isoformat()
 
@@ -567,10 +584,16 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 d: p for d, p in history.get(key, {}).items() if cutoff <= d < today.isoformat()
             }
             flags: list[str] = []
+            keys: list[str] = []
+
+            def flag(key: str, _keys=keys, _flags=flags, **values: Any) -> None:
+                _keys.append(key)
+                _flags.append(text(lang, key, **values))
+
             offer["history_min"] = min(past.values()) if past else None
             offer["history_days"] = len(past)
             if past and metric <= min(past.values()):
-                flags.append(f"Nejlevněji za posledních {HISTORY_DAYS} dní")
+                flag("history_min", days=HISTORY_DAYS)
             avg = brand_avg.get(offer["brand"])
             offer["cheaper_than_avg"] = (
                 round(avg - offer["price_per_half_liter"], 2)
@@ -578,27 +601,26 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else None
             )
             if offer["cheaper_than_avg"] and offer["cheaper_than_avg"] >= 1:
-                flags.append(
-                    f"O {offer['cheaper_than_avg']:.2f} {symbol}/0,5 l levnější než průměr akcí"
-                )
+                flag("cheaper_than_avg", amount=f"{offer['cheaper_than_avg']:.2f}", symbol=symbol)
             if offer.get("discount_percent") and offer["discount_percent"] >= 30:
-                flags.append(f"Sleva {offer['discount_percent']:g} %")
+                flag("discount", percent=f"{offer['discount_percent']:g}")
             if offer.get("price_per_half_liter") and offer["price_per_half_liter"] <= alert:
-                flags.append(f"Pod limitem {alert:g} {symbol}/0,5 l")
+                flag("below_limit", limit=f"{alert:g}", symbol=symbol)
                 offer["below_alert"] = True
             else:
                 offer["below_alert"] = False
             if offer["valid_to"] == today.isoformat():
-                flags.append("Končí dnes")
+                flag("ends_today")
             elif offer["valid_to"] == (today + timedelta(days=1)).isoformat():
-                flags.append("Končí zítra")
+                flag("ends_tomorrow")
             if offer["upcoming"]:
-                flags.append(f"Platí od {offer['valid_from']}")
+                flag("valid_from", date=offer["valid_from"])
             if offer["loyalty"]:
-                flags.append("Jen s věrnostní kartou/aplikací")
+                flag("loyalty")
             if offer["pieces"] and offer["pieces"] >= 6:
-                flags.append(f"Multipack {offer['pieces']} ks")
+                flag("multipack", pieces=offer["pieces"])
             offer["flags"] = flags
+            offer["flag_keys"] = keys
 
             if not offer["upcoming"]:
                 day_prices = history.setdefault(key, {})
@@ -689,6 +711,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "country": self.country,
             "currency": self.currency,
             "currency_symbol": self.currency_symbol,
+            "language": self.language,
             "by_source": {
                 key: sum(1 for o in current if key in o.get("sources", [o.get("source")]))
                 for key in self._status

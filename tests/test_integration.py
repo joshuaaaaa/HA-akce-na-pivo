@@ -118,7 +118,7 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
     )
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"name": "Pivo", "country": "CZ"}
+        result["flow_id"], {"name": "Pivo", "language": "cs", "country": "CZ"}
     )
     assert result["step_id"] == "settings"
     result = await hass.config_entries.flow.async_configure(
@@ -283,7 +283,7 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"name": "Pivo SK", "country": "SK"}
+        result["flow_id"], {"name": "Pivo SK", "language": "sk", "country": "SK"}
     )
     assert result["step_id"] == "settings"
     source_options = [o["value"] for o in result["data_schema"].schema["sources"].config["options"]]
@@ -322,7 +322,8 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     assert top[0]["address"] == "Trnavská cesta 41, 82108 Bratislava"
     assert top[1]["price"] == 4.49 and top[1]["price_per_half_liter"] == 0.75
     assert all(o["currency"] == "EUR" for o in top)
-    assert "Pod limitem 0.7 €/0,5 l" in top[0]["flags"]
+    assert "Pod limitom 0.7 €/0,5 l" in top[0]["flags"]  # slovenské texty
+    assert "below_limit" in top[0]["flag_keys"]
 
     query = next(c[2]["data"] for c in aioclient_mock.mock_calls if "overpass" in str(c[1]))
     assert "area(id:3600014296)" in query  # území SK
@@ -331,6 +332,7 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     assert where.state == "Kaufland"
     assert "0,69 €" in where.attributes["summary"]
     assert hass.states.get("sensor.pivo_sk_where_to_buy_saris").state == "COOP Jednota"
+    assert cheapest.attributes["language"] == "sk"
 
 
 async def test_packaging_filter(hass: HomeAssistant, aioclient_mock, freezer) -> None:
@@ -431,3 +433,42 @@ async def test_degree_filter(hass: HomeAssistant, aioclient_mock, freezer) -> No
     assert cheapest.attributes["not_on_sale"] == ["Šariš"]
     count = [s for s in hass.states.async_all("sensor") if "filter" in s.attributes][0]
     assert count.attributes["filter"]["degree_excluded"] == 1
+
+
+async def test_language_auto_follows_home_assistant(
+    hass: HomeAssistant, aioclient_mock, freezer
+) -> None:
+    """Jazyk "auto" = jazyk HA (tady angličtina); "Není v akci" se přeloží."""
+    freezer.move_to("2026-09-23 10:00:00+02:00")
+    hass.config.language = "en"
+    hass.config.latitude, hass.config.longitude = 48.148, 17.107
+    aioclient_mock.get(
+        "https://www.zlacnene.sk/akciovy-tovar/napoje-alkoholicke/pivo/", text=SK_HTML
+    )
+    aioclient_mock.get(re.compile(r"^https://"), status=404)
+    aioclient_mock.post("https://overpass-api.de/api/interpreter", json=SK_OVERPASS)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Auto", "language": "auto", "country": "SK"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"brands": ["Zlatý Bažant", "Topvar"], "sources": ["zlacnene"], "max_pages": 1},
+    )
+    assert result["options"]["language"] == "auto"
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.auto_where_to_buy_topvar").state == "Not on sale"
+
+    # jazyk jde změnit v Konfiguraci
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "language" in result["data_schema"].schema
+    allowed = {str(key) for key in result["data_schema"].schema}
+    values = {k: v for k, v in entry.options.items() if k in allowed}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**values, "language": "sk"}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.auto_where_to_buy_topvar").state == "Nie je v akcii"

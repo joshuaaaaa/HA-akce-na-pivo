@@ -14,6 +14,7 @@ from . import BeerConfigEntry
 from .const import ALL_BRANDS, SORT_PRICE
 from .coordinator import BeerDealsCoordinator
 from .entity import BeerEntity, offer_attributes
+from .texts import text
 
 CARD_OFFERS = 15
 
@@ -80,9 +81,10 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
         attrs = offer_attributes(self._best)
         attrs.update(
             {
-                "value_type": "cena za balení"
-                if data.get("sort_by") == SORT_PRICE
-                else "cena za 0,5 l",
+                "value_type": text(
+                    self.coordinator.language,
+                    "value_package" if data.get("sort_by") == SORT_PRICE else "value_half_liter",
+                ),
                 "sort_by": data.get("sort_by"),
                 # víc nabídek než TOP N, aby karty mohly filtrovat podle značky a obalu
                 "offers": [
@@ -108,6 +110,7 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
                 "country": data.get("country"),
                 "currency": data.get("currency"),
                 "currency_symbol": data.get("currency_symbol"),
+                "language": data.get("language"),
             }
         )
         return attrs
@@ -234,11 +237,8 @@ class BrandSensor(CurrencyUnit, BeerEntity, SensorEntity):
         return attrs
 
 
-NOT_ON_SALE = {"CZ": "Není v akci", "SK": "Nie je v akcii"}
-
-
 def _not_on_sale(coordinator: BeerDealsCoordinator) -> str:
-    return NOT_ON_SALE.get(coordinator.country, NOT_ON_SALE["CZ"])
+    return text(coordinator.language, "not_on_sale")
 
 
 def _money(value: float | None, symbol: str) -> str:
@@ -301,7 +301,13 @@ class WhereToGoSensor(BeerEntity, SensorEntity):
             price = _money(offer["price"], symbol)
             if offer.get("price_per_half_liter"):
                 price += f" – {_money(offer['price_per_half_liter'], symbol)}/0,5 l"
-            attrs["summary"] = f"{where}: {offer['product']} za {price}"
+            attrs["summary"] = text(
+                self.coordinator.language,
+                "summary",
+                where=where,
+                product=offer["product"],
+                price=price,
+            )
             attrs["currency_symbol"] = symbol
             attrs["for_brand"] = self._brand
         return attrs
