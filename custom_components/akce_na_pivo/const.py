@@ -31,6 +31,13 @@ PACKAGING_OPTIONS = [PACKAGING_GLASS, PACKAGING_CAN, PACKAGING_PET]
 
 # Stupňovitost piva
 CONF_DEGREES = "degrees"
+
+# Typ obchodu: kamenné i online / jen kamenné / jen online
+CONF_SHOP_TYPE = "shop_type"
+SHOP_TYPE_ALL = "all"
+SHOP_TYPE_PHYSICAL = "physical"
+SHOP_TYPE_ONLINE = "online"
+SHOP_TYPE_OPTIONS = [SHOP_TYPE_ALL, SHOP_TYPE_PHYSICAL, SHOP_TYPE_ONLINE]
 CONF_INCLUDE_UNKNOWN_DEGREE = "include_unknown_degree"
 DEGREE_OPTIONS = ["10", "11", "12", "other"]
 CONF_MAX_PAGES = "max_pages"
@@ -57,6 +64,7 @@ DEFAULT_PACKAGING = [PACKAGING_GLASS, PACKAGING_CAN, PACKAGING_PET]
 DEFAULT_INCLUDE_UNKNOWN_PACKAGING = True
 DEFAULT_DEGREES = list(DEGREE_OPTIONS)
 DEFAULT_INCLUDE_UNKNOWN_DEGREE = True
+DEFAULT_SHOP_TYPE = SHOP_TYPE_ALL
 DEFAULT_MAX_PAGES = 6
 
 MAX_TOP_COUNT = 10
@@ -188,7 +196,20 @@ CHAIN_NAMES: dict[str, str] = {
 }
 
 # Online obchody – nemají kamennou pobočku
-ONLINE_SHOPS = ("rohlik", "kosik", "tesco online", "albert online", "online", "kosik.sk")
+ONLINE_SHOPS = (
+    "rohlik",
+    "kosik",
+    "tesco online",
+    "albert online",
+    "online",
+    "e-shop",
+    "eshop",
+    "kosik.sk",
+    "potravinydomov",
+    "freshbox",
+    "mall.cz",
+    "alza",
+)
 
 # Zdroje akcí. URL šablony: {query} = hledaný text, {slug} = značka ve tvaru "pilsner-urquell".
 # Adresy mimo kupi.cz nešlo při vývoji ověřit – lze je přepsat v nastavení (vlastní URL).

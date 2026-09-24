@@ -28,6 +28,7 @@ from .const import (
     CONF_PACKAGING,
     CONF_PRICE_ALERT,
     CONF_REQUIRE_NEARBY_STORE,
+    CONF_SHOP_TYPE,
     CONF_SORT_BY,
     CONF_SOURCES,
     CONF_TOP_COUNT,
@@ -45,6 +46,7 @@ from .const import (
     DEFAULT_MAX_PAGES,
     DEFAULT_PACKAGING,
     DEFAULT_REQUIRE_NEARBY_STORE,
+    DEFAULT_SHOP_TYPE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
     DEFAULT_UPDATE_INTERVAL_HOURS,
@@ -55,6 +57,7 @@ from .const import (
     MAX_TOP_COUNT,
     NAME,
     PACKAGING_OPTIONS,
+    SHOP_TYPE_OPTIONS,
     SORT_OPTIONS,
     SOURCES,
     country_sources,
@@ -154,6 +157,15 @@ def _schema(values: dict[str, Any], country: str, with_language: bool = False) -
                 CONF_INCLUDE_UNKNOWN_DEGREE,
                 default=values.get(CONF_INCLUDE_UNKNOWN_DEGREE, DEFAULT_INCLUDE_UNKNOWN_DEGREE),
             ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_SHOP_TYPE, default=values.get(CONF_SHOP_TYPE, DEFAULT_SHOP_TYPE)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=SHOP_TYPE_OPTIONS,
+                    translation_key=CONF_SHOP_TYPE,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            ),
             vol.Required(
                 CONF_SOURCES,
                 default=[s for s in values.get(CONF_SOURCES, sources) if s in sources] or sources,

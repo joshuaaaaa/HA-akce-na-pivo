@@ -12,7 +12,7 @@
  *   3. do dashboardu přidejte kartu "Pivní karta" (type: custom:pivni-karta)
  */
 
-const PIVNI_KARTA_VERSION = "1.4.0";
+const PIVNI_KARTA_VERSION = "1.5.0";
 
 console.info(
   `%c 🍺 PIVNI-KARTA %c v${PIVNI_KARTA_VERSION} `,
@@ -198,18 +198,27 @@ class PivniKarta extends HTMLElement {
     const symbol = attrs.currency_symbol || "Kč";
     const locale = LOCALES[this._lang()];
     this._locale = locale;
+    // jen možnosti vybrané v nastavení integrace, na které je teď nějaká akce
+    const selected = attrs.selected || {};
+    const degKinds = Object.keys(DEGREES).filter(
+      (k) =>
+        (!selected.degrees || selected.degrees.includes(k)) &&
+        ((attrs.degree_best || {})[k] || (attrs.offers || []).some((o) => degreeGroup(o.degree) === k))
+    );
+    const packKinds = Object.keys(PACKAGING).filter(
+      (k) =>
+        (!selected.packaging || selected.packaging.includes(k)) &&
+        ((attrs.packaging_best || {})[k] || (attrs.offers || []).some((o) => o.packaging === k))
+    );
+    // výchozí obal/stupeň z karty, který v integraci vybraný není, se ignoruje
+    if (this._packaging && this._packaging !== ALL && !packKinds.includes(this._packaging)) this._packaging = null;
+    if (this._degree && this._degree !== ALL && !degKinds.includes(this._degree)) this._degree = null;
     const selection = this._selection(attrs);
     const list = selection.list;
     // klepnutím na akci v žebříčku se ukáže nahoře
     const best = (this._picked && list.find((o) => this._offerKey(o) === this._picked)) || selection.best;
     const notOnSale = attrs.not_on_sale || [];
     const brandNames = [...Object.keys(attrs.brands || {}), ...notOnSale.filter((b) => !(attrs.brands || {})[b])];
-    const degKinds = Object.keys(DEGREES).filter(
-      (k) => (attrs.degree_best || {})[k] || (attrs.offers || []).some((o) => degreeGroup(o.degree) === k)
-    );
-    const packKinds = Object.keys(PACKAGING).filter(
-      (k) => (attrs.packaging_best || {})[k] || (attrs.offers || []).some((o) => o.packaging === k)
-    );
     const count = Math.max(1, Number(this._config.count) || 5);
     const updated = attrs.updated ? new Date(attrs.updated) : null;
 
@@ -246,12 +255,12 @@ class PivniKarta extends HTMLElement {
               ${brandNames.map((b) => `<button class="chip ${this._brand === b ? "on" : ""} ${notOnSale.includes(b) ? "off" : ""}" data-brand="${esc(b)}" ${notOnSale.includes(b) ? `title="${this._t("not_on_sale")}"` : ""}>${esc(b)}</button>`).join("")}
             </div>` : ""}
           ${notOnSale.length && (!this._brand || this._brand === ALL) ? `<div class="nosale">❌ ${this._t("not_on_sale")}: ${notOnSale.map(esc).join(", ")}</div>` : ""}
-          ${this._config.show_packaging && packKinds.length ? `
+          ${this._config.show_packaging && packKinds.length > 1 ? `
             <div class="brands packs" role="tablist">
               <button class="chip ${!this._packaging || this._packaging === ALL ? "on" : ""}" data-pack="${ALL}">${this._t("any_pack")}</button>
               ${packKinds.map((k) => `<button class="chip ${this._packaging === k ? "on" : ""}" data-pack="${k}">${PACKAGING[k].icon} ${this._packLabel(k)}</button>`).join("")}
             </div>` : ""}
-          ${this._config.show_degrees && degKinds.length ? `
+          ${this._config.show_degrees && degKinds.length > 1 ? `
             <div class="brands packs" role="tablist">
               <button class="chip ${!this._degree || this._degree === ALL ? "on" : ""}" data-deg="${ALL}">${this._t("any_degree")}</button>
               ${degKinds.map((k) => `<button class="chip ${this._degree === k ? "on" : ""}" data-deg="${k}">${this._degreeLabel(k)}</button>`).join("")}

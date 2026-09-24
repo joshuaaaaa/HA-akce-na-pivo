@@ -472,3 +472,65 @@ async def test_language_auto_follows_home_assistant(
     )
     await hass.async_block_till_done()
     assert hass.states.get("sensor.auto_where_to_buy_topvar").state == "Nie je v akcii"
+
+
+ONLINE_HTML = (
+    SK_HTML
+    + """
+<div class="offer">
+  <h3>Zlatý Bažant 10 svetlé pivo 0,5 l</h3>
+  <span class="shop">Košík.sk</span>
+  <span class="price">0,59 €</span>
+  <span>22.9. - 28.9.</span>
+</div>
+"""
+)
+
+
+@pytest.mark.parametrize(
+    ("shop_type", "expected"),
+    [
+        ("physical", {"Kaufland", "COOP"}),
+        ("online", {"Košík.cz"}),
+        ("all", {"Kaufland", "COOP", "Košík.cz"}),
+    ],
+)
+async def test_shop_type_filter(
+    hass: HomeAssistant, aioclient_mock, freezer, shop_type, expected
+) -> None:
+    freezer.move_to("2026-09-23 10:00:00+02:00")
+    hass.config.latitude, hass.config.longitude = 48.148, 17.107
+    aioclient_mock.get(
+        "https://www.zlacnene.sk/akciovy-tovar/napoje-alkoholicke/pivo/", text=ONLINE_HTML
+    )
+    aioclient_mock.get(re.compile(r"^https://"), status=404)
+    aioclient_mock.post("https://overpass-api.de/api/interpreter", json=SK_OVERPASS)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Obchody", "language": "sk", "country": "SK"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "brands": ["Zlatý Bažant", "Šariš"],
+            "sources": ["zlacnene"],
+            "shop_type": shop_type,
+            "packaging": ["can"],
+            "max_pages": 1,
+        },
+    )
+    assert result["options"]["shop_type"] == shop_type
+    await hass.async_block_till_done()
+
+    cheapest = hass.states.get("sensor.obchody_cheapest_beer")
+    offers = cheapest.attributes["offers"]
+    assert {o["shop"] for o in offers} == expected
+    assert all(o["online"] for o in offers) if shop_type == "online" else True
+    # karty dostanou, co je v nastavení vybrané
+    assert cheapest.attributes["selected"] == {
+        "packaging": ["can"],
+        "degrees": ["10", "11", "12", "other"],
+        "shop_type": shop_type,
+    }

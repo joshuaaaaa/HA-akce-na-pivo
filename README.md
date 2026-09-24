@@ -102,6 +102,7 @@ https://www.nejaky-web.cz/hledat?q={query}
 | Výběr značek | Výběr ze seznamu (Pilsner Urquell, Kozel, Gambrinus, Radegast, Staropramen, Budvar, Bernard, Svijany…), **vlastní značka** (napište ji a potvrďte Enterem, jde zadat i víc značek oddělených čárkou), nebo **„Všechna piva v akci“** |
 | Sklo, nebo plech | Vyberete obal: **🍾 sklo**, **🥫 plech**, **🧴 PET** (libovolná kombinace). Obal se pozná z názvu akce („plech“, „plechovka“, „lahev“, „sklo“, „fľaša“, „PET“…), pivo od 1 l se bere jako PET. Letáky obal často neuvádějí, proto volba **„Zahrnout akce, u kterých obal nejde poznat“** (výchozí zapnuto). Když ji vypnete, uvidíte jen akce s jistě uvedeným obalem. |
 | 10°, 11°, nebo 12° | Vyberete **stupňovitost**: 10° (desítka), 11° (jedenáctka), 12° (dvanáctka) a/nebo **ostatní** (výčepní 7–9°, speciály 13° a víc). Stupeň se pozná z názvu akce („Kozel 11“, „12°“, slovenské „12%“, „desítka“, „výčepní“). U známých piv bez čísla v názvu se doplní (Pilsner Urquell = 12°, Gambrinus Originál = 10°, Radegast Rázná = 10°…). Volba **„Zahrnout akce, u kterých stupeň nejde poznat“** (výchozí zapnuto) rozhodne, co s ostatními akcemi. |
+| Kamenné, nebo online | **Typ obchodu**: 🏪+🛒 kamenné i online, 🏪 **jen kamenné** (pobočka na mapě, dá se tam dojít), nebo 🛒 **jen online** (Rohlik.cz, Košík…, doručení domů). Nevybrané obchody se nezobrazí nikde, ani v senzorech, ani v kartách. |
 | Čas kontroly | Denní kontrola v zadaný čas, volitelně navíc každých N hodin. Kdykoli ručně: tlačítko **Aktualizovat akce** nebo služba `akce_na_pivo.refresh` |
 | Poloha | Domov HA, nebo entita `person` / `device_tracker` / `zone` (GPS telefonu). Když se posunete o víc než 2 km, nejbližší pobočky se přepočítají |
 | TOP N | Počet zobrazených nejlevnějších nabídek volíte v nastavení (1–10, výchozí 5) |
@@ -115,7 +116,7 @@ https://www.nejaky-web.cz/hledat?q={query}
 - **Sleva ≥ 30 %** a odhad původní ceny.
 - **Pod limitem**: nastavíte si cenu za 0,5 l a dostanete událost `akce_na_pivo_levne_pivo` a zapne se binární senzor.
 - **Končí dnes / zítra**, **Platí od…** (připravované akce z nových letáků), **Jen s věrnostní kartou** (Lidl Plus, Clubcard, Můj Albert…), **Multipack**.
-- Filtry: stupňovitost (10° / 11° / 12° / ostatní), obal (sklo / plech / PET), vynechat nealko, vynechat akce jen s kartou, zobrazit jen obchody s pobočkou v okolí (limit km).
+- Filtry: typ obchodu (kamenné / online), stupňovitost (10° / 11° / 12° / ostatní), obal (sklo / plech / PET), vynechat nealko, vynechat akce jen s kartou, zobrazit jen obchody s pobočkou v okolí (limit km).
 
 ## Instalace integrace
 
@@ -177,7 +178,9 @@ např. `/local/pivni-karta.js?v=4`, aby prohlížeč nenačítal starou verzi z 
 - **klepnutí na akci v žebříčku** ji zobrazí nahoře (obchod, adresa, navigace).
   Vybrané značky, na které teď akce není, jsou přeškrtnuté a karta u nich napíše **„teď není v akci“**.
   Ostatní značky se zobrazují normálně.
-- **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“,
+- **přepínač obalu** (Každý obal / 🍾 Sklo / 🥫 Plech / 🧴 PET): třeba „kam pro Kozla v plechu“.
+  Přepínače obalu a stupně nabízejí jen možnosti vybrané v nastavení integrace. Když je
+  vybraná jen jedna (třeba jen plech), přepínač se vůbec nezobrazí.
 - **přepínač stupně** (Každý stupeň / 10° / 11° / 12°): třeba „kam pro dvanáctku“,
 - mapu s označeným obchodem a žebříček nejlevnějších akcí.
 
@@ -302,7 +305,7 @@ entities:
 Otevřete **Nastavení → Zařízení a služby → Akce na pivo → senzor Počet akcí → Atributy**:
 
 - `filter.downloaded`: kolik akcí se celkem stáhlo,
-- `filter.brand_mismatch` / `expired` / `loyalty_excluded` / `packaging_excluded` / `degree_excluded` / …: kolik akcí se vyřadilo a proč,
+- `filter.brand_mismatch` / `expired` / `loyalty_excluded` / `packaging_excluded` / `degree_excluded` / `shop_type_excluded` / …: kolik akcí se vyřadilo a proč,
 - `filter.sample_products`: ukázka stažených názvů (produkt | obchod | cena | zdroj). Z ní je vidět,
   jestli web vrací správná data,
 - `sources.<zdroj>.errors`: chyby jednotlivých webů, třeba `HTTP 403`, „ochrana proti robotům“

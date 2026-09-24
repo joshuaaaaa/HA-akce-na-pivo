@@ -22,45 +22,7 @@
           "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
           "degrees": "Stupňovitost",
           "include_unknown_degree": "Zahrnout akce, u kterých stupeň nejde poznat",
-          "sources": "Zdroje akcí",
-          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
-          "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
-          "update_time": "Čas denní kontroly",
-          "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
-          "top_count": "Kolik nejlevnějších nabídek zobrazit",
-          "sort_by": "Řadit podle",
-          "max_distance_km": "Hledat pobočky do vzdálenosti",
-          "require_nearby_store": "Zobrazit jen obchody, které mají pobočku v okolí",
-          "price_alert": "Upozornit, když 0,5 l stojí méně než",
-          "include_upcoming": "Zahrnout i akce, které teprve začnou",
-          "exclude_loyalty": "Vynechat akce jen s věrnostní kartou/aplikací",
-          "exclude_nonalcoholic": "Vynechat nealko pivo",
-          "max_pages": "Max. počet stránek kupi.cz ke stažení"
-        },
-        "data_description": {
-          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
-          "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
-          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
-          "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
-          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá."
-        }
-      }
-    },
-    "error": {
-      "no_brands": "Vyberte nebo zadejte alespoň jednu značku."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Akce na pivo – nastavení ({country})",
-        "data": {
-          "language": "Jazyk textů v senzorech",
-          "brands": "Značky piva",
-          "packaging": "Obal piva",
-          "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
-          "degrees": "Stupňovitost",
-          "include_unknown_degree": "Zahrnout akce, u kterých stupeň nejde poznat",
+          "shop_type": "Typ obchodu",
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
@@ -82,7 +44,49 @@
           "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
           "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
           "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá.",
-          "language": "Jazyk štítků akcí, textu „Není v akci“ a shrnutí. Automaticky = podle jazyka Home Assistantu."
+          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě."
+        }
+      }
+    },
+    "error": {
+      "no_brands": "Vyberte nebo zadejte alespoň jednu značku."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Akce na pivo – nastavení ({country})",
+        "data": {
+          "language": "Jazyk textů v senzorech",
+          "brands": "Značky piva",
+          "packaging": "Obal piva",
+          "include_unknown_packaging": "Zahrnout akce, u kterých obal nejde poznat",
+          "degrees": "Stupňovitost",
+          "include_unknown_degree": "Zahrnout akce, u kterých stupeň nejde poznat",
+          "shop_type": "Typ obchodu",
+          "sources": "Zdroje akcí",
+          "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
+          "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
+          "update_time": "Čas denní kontroly",
+          "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
+          "top_count": "Kolik nejlevnějších nabídek zobrazit",
+          "sort_by": "Řadit podle",
+          "max_distance_km": "Hledat pobočky do vzdálenosti",
+          "require_nearby_store": "Zobrazit jen obchody, které mají pobočku v okolí",
+          "price_alert": "Upozornit, když 0,5 l stojí méně než",
+          "include_upcoming": "Zahrnout i akce, které teprve začnou",
+          "exclude_loyalty": "Vynechat akce jen s věrnostní kartou/aplikací",
+          "exclude_nonalcoholic": "Vynechat nealko pivo",
+          "max_pages": "Max. počet stránek kupi.cz ke stažení"
+        },
+        "data_description": {
+          "custom_urls": "Volitelné. Do adresy lze vložit zástupný znak query (hledaná značka) nebo slug (značka ve tvaru pilsner-urquell) ve složených závorkách – příklady jsou v README.",
+          "packaging": "Obal se pozná z názvu akce (plech, plechovka, lahev, sklo, PET…). Pivo od 1 l se bere jako PET.",
+          "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
+          "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
+          "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá.",
+          "language": "Jazyk štítků akcí, textu „Není v akci“ a shrnutí. Automaticky = podle jazyka Home Assistantu.",
+          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě."
         }
       }
     },
@@ -119,6 +123,13 @@
         "cs": "Čeština",
         "sk": "Slovenčina",
         "en": "English"
+      }
+    },
+    "shop_type": {
+      "options": {
+        "all": "🏪+🛒 Kamenné i online obchody",
+        "physical": "🏪 Jen kamenné obchody",
+        "online": "🛒 Jen online obchody (Rohlik.cz, Košík…)"
       }
     }
   },

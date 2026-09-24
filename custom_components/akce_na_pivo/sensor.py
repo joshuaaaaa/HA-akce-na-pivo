@@ -107,6 +107,7 @@ class CheapestBeerSensor(CurrencyUnit, BeerEntity, SensorEntity):
                 },
                 "by_source": data.get("by_source"),
                 "not_on_sale": data.get("not_on_sale", []),
+                "selected": data.get("selected"),
                 "country": data.get("country"),
                 "currency": data.get("currency"),
                 "currency_symbol": data.get("currency_symbol"),

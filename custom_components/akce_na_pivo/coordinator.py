@@ -37,6 +37,7 @@ from .const import (
     CONF_PACKAGING,
     CONF_PRICE_ALERT,
     CONF_REQUIRE_NEARBY_STORE,
+    CONF_SHOP_TYPE,
     CONF_SORT_BY,
     CONF_SOURCES,
     CONF_TOP_COUNT,
@@ -52,6 +53,7 @@ from .const import (
     DEFAULT_MAX_PAGES,
     DEFAULT_PACKAGING,
     DEFAULT_REQUIRE_NEARBY_STORE,
+    DEFAULT_SHOP_TYPE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
     DEGREE_OPTIONS,
@@ -63,6 +65,8 @@ from .const import (
     KUPI_SEARCH_URL,
     PACKAGING_OPTIONS,
     RELOCATE_DISTANCE_KM,
+    SHOP_TYPE_ONLINE,
+    SHOP_TYPE_PHYSICAL,
     SORT_DISTANCE,
     SORT_PRICE,
     SOURCE_CUSTOM,
@@ -498,6 +502,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.opt(CONF_INCLUDE_UNKNOWN_DEGREE, DEFAULT_INCLUDE_UNKNOWN_DEGREE)
         )
         all_degrees = degrees >= set(DEGREE_OPTIONS) and include_unknown_degree
+        shop_type = self.opt(CONF_SHOP_TYPE, DEFAULT_SHOP_TYPE)
         result = []
         stats = {
             "downloaded": len(offers),
@@ -508,6 +513,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "nonalcoholic_excluded": 0,
             "packaging_excluded": 0,
             "degree_excluded": 0,
+            "shop_type_excluded": 0,
         }
         for offer in offers:
             brand = (
@@ -542,6 +548,11 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not all_degrees and (group not in degrees if group else not include_unknown_degree):
                 stats["degree_excluded"] += 1
                 continue
+            if (shop_type == SHOP_TYPE_PHYSICAL and offer["online"]) or (
+                shop_type == SHOP_TYPE_ONLINE and not offer["online"]
+            ):
+                stats["shop_type_excluded"] += 1
+                continue
             result.append({**offer, "brand": brand, "upcoming": upcoming})
         stats["matching"] = len(result)
         # ukázka stažených názvů – podle ní jde poznat, proč nic neodpovídá značkám
@@ -559,6 +570,17 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "; ".join(stats["sample_products"][:8]),
             )
         return result
+
+    def _selected_filters(self) -> dict[str, Any]:
+        packaging = [
+            p for p in PACKAGING_OPTIONS if p in self.opt(CONF_PACKAGING, DEFAULT_PACKAGING)
+        ]
+        degrees = [d for d in DEGREE_OPTIONS if d in self.opt(CONF_DEGREES, DEFAULT_DEGREES)]
+        return {
+            "packaging": packaging or list(PACKAGING_OPTIONS),
+            "degrees": degrees or list(DEGREE_OPTIONS),
+            "shop_type": self.opt(CONF_SHOP_TYPE, DEFAULT_SHOP_TYPE),
+        }
 
     def _history_key(self, offer: dict[str, Any]) -> str:
         return f"{normalize(offer['product'])}|{offer['chain']}"
@@ -699,6 +721,8 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "brands": brands,
             # vybrané značky, na které teď žádná akce není
             "not_on_sale": [b for b in self.brands if b != ALL_BRANDS and b not in brands],
+            # co je vybrané v nastavení – karty podle toho skryjí nevybrané možnosti
+            "selected": self._selected_filters(),
             "packaging_best": packaging,
             "degree_best": degree_best,
             "location": {"latitude": lat, "longitude": lon, "source": source},
