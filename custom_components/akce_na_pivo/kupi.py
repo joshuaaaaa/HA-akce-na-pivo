@@ -13,6 +13,13 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+try:  # lxml je řádově rychlejší než vestavěný html.parser
+    import lxml  # noqa: F401
+
+    _LXML = True
+except ImportError:  # pragma: no cover - závisí na instalaci HA
+    _LXML = False
+
 from .const import CHAIN_ALIASES, KNOWN_BRANDS, KUPI_BASE_URL, NONALCOHOLIC_WORDS, ONLINE_SHOPS
 
 CZECH_MONTHS = {
@@ -378,9 +385,31 @@ def _ancestor_name(row: Any) -> str:
     return ""
 
 
-def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]]:
+def _cls_text(node: Any, css_class: str, inner: str | None = None) -> str:
+    """Text prvku s danou třídou – rychlejší než CSS selektor (find místo select)."""
+    found = node.find(class_=css_class)
+    if found is None:
+        return ""
+    if inner:
+        found = found.find(inner) or found
+    return clean_text(found.get_text(" ", strip=True))
+
+
+def make_soup(html: str | BeautifulSoup) -> BeautifulSoup:
+    """HTML -> BeautifulSoup; rychlejší lxml, pokud je v Home Assistantu k dispozici."""
+    if isinstance(html, BeautifulSoup):
+        return html
+    if _LXML:
+        try:
+            return BeautifulSoup(html, "lxml")
+        except Exception:  # noqa: BLE001 - poškozené HTML zkusíme vestavěným parserem
+            pass
+    return BeautifulSoup(html, "html.parser")
+
+
+def parse_offers(html: str | BeautifulSoup, source_url: str, today: date) -> list[dict[str, Any]]:
     """Najde všechny akční nabídky (řádky slev) na stránce kupi.cz."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = make_soup(html)
     products = _product_lookup(soup)
     page_title = _text(soup, "h1")
     # nadpis stránky je název produktu jen na detailu (/sleva/...), ne na výpisu kategorie
@@ -402,25 +431,34 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
             parent = row.find_parent(attrs={"data-product-id": True})
             product_id = str(parent.get("data-product-id")) if parent else ""
         product = products.get(product_id, {})
-        row_link = row.select_one("a.product_link_history[href], a[href*='/sleva/']")
+
+        def row_link_href(row=row) -> str:
+            link = row.find("a", class_="product_link_history", href=True) or row.find(
+                "a", href=re.compile("/sleva/")
+            )
+            return link["href"] if link else ""
+
+        # záložní zdroje názvu počítáme až když jsou potřeba (CSS selektory jsou drahé)
         candidates = (
-            product.get("name"),
-            _ancestor_name(row),
-            name_from_url(row_link["href"] if row_link else ""),
-            name_from_url(product.get("url")),
+            lambda p=product: p.get("name"),
+            lambda r=row: _ancestor_name(r),
+            lambda f=row_link_href: name_from_url(f()),
+            lambda p=product: name_from_url(p.get("url")),
         )
-        name = next((c for c in candidates if c and normalize(c) not in headings), "")
+        name = next((c for get in candidates if (c := get()) and normalize(c) not in headings), "")
         if not name and is_detail:
             name = page_title
-        shop = _text(row, ".discounts_shop_name a, .discounts_shop_name")
-        price = parse_price(_text(row, ".discount_price_value, .discount_price"))
+        shop = _cls_text(row, "discounts_shop_name", inner="a")
+        price = parse_price(
+            _cls_text(row, "discount_price_value") or _cls_text(row, "discount_price")
+        )
         if not name or not shop or price is None:
             continue
 
-        amount = _text(row, ".discount_amount").lstrip("/ ").strip()
-        unit_text = _text(row, ".price_per_unit")
-        discount = parse_percentage(_text(row, ".discount_percentage"))
-        validity = _text(row, ".discounts_validity")
+        amount = _cls_text(row, "discount_amount").lstrip("/ ").strip()
+        unit_text = _cls_text(row, "price_per_unit")
+        discount = parse_percentage(_cls_text(row, "discount_percentage"))
+        validity = _cls_text(row, "discounts_validity")
         valid_from, valid_to = parse_validity(validity, today)
         row_text = normalize(row.get_text(" ", strip=True))
         loyalty = any(
@@ -439,8 +477,8 @@ def parse_offers(html: str, source_url: str, today: date) -> list[dict[str, Any]
         link = next(
             (
                 found
-                for selector in ("a.btn_link_leaflet[href]", "a.product_link_history[href]")
-                if (found := row.select_one(selector)) is not None
+                for css_class in ("btn_link_leaflet", "product_link_history")
+                if (found := row.find("a", class_=css_class, href=True)) is not None
             ),
             None,
         )
@@ -545,9 +583,9 @@ def build_offer(
     }
 
 
-def kupi_html_sample(html: str, limit: int = 1500) -> str:
+def kupi_html_sample(html: str | BeautifulSoup, limit: int = 1500) -> str:
     """Zkrácené HTML první akce se dvěma nadřazenými bloky – pro diagnostiku."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = make_soup(html)
     row = soup.select_one(".discount_row")
     if row is None:
         return "stránka neobsahuje .discount_row"
@@ -555,6 +593,6 @@ def kupi_html_sample(html: str, limit: int = 1500) -> str:
     for _ in range(2):
         if node.parent is not None and node.parent.name not in ("body", "html"):
             node = node.parent
-    for tag in node.find_all(["script", "style", "svg"]):
-        tag.decompose()
-    return " ".join(str(node).split())[:limit]
+    # sdílený strom neměníme – skripty a styly odstraníme až z textu
+    text = re.sub(r"<(script|style|svg)\b.*?</\1>", "", str(node), flags=re.S | re.I)
+    return " ".join(text.split())[:limit]

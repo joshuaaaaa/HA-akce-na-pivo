@@ -16,12 +16,13 @@ from datetime import date
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Comment, Tag
 
 from .const import CHAIN_ALIASES, CHAIN_NAMES, COUNTRIES, DEFAULT_COUNTRY
 from .kupi import (
     build_offer,
     clean_text,
+    make_soup,
     normalize,
     parse_validity,
     to_float,
@@ -299,11 +300,7 @@ def _jsonld_products(data: Any):
 def parse_jsonld(
     html_or_soup: Any, page_url: str, today: date, source: str, country: str = DEFAULT_COUNTRY
 ) -> list[dict[str, Any]]:
-    soup = (
-        html_or_soup
-        if isinstance(html_or_soup, BeautifulSoup)
-        else BeautifulSoup(html_or_soup, "html.parser")
-    )
+    soup = html_or_soup if isinstance(html_or_soup, BeautifulSoup) else make_soup(html_or_soup)
     fallback_shop = _chain_from_url(page_url)
     offers: list[dict[str, Any]] = []
     for script in soup.select('script[type="application/ld+json"]'):
@@ -488,6 +485,26 @@ def _card_prices(
     return price, old
 
 
+CURRENCY_HINT_RE = re.compile(r"Kč|kč|KČ|CZK|,-|€|EUR")
+
+
+def _text_lengths(soup: BeautifulSoup) -> dict[int, int]:
+    """Přibližná délka viditelného textu každého prvku, spočítaná jedním průchodem."""
+    lengths: dict[int, int] = {}
+    for tag in reversed(soup.find_all(True)):
+        if tag.name in ("script", "style", "noscript"):
+            lengths[id(tag)] = 0
+            continue
+        total = 0
+        for child in tag.children:
+            if isinstance(child, Tag):
+                total += lengths.get(id(child), 0)
+            elif not isinstance(child, Comment):
+                total += len(child.strip()) + 1
+        lengths[id(tag)] = total
+    return lengths
+
+
 def parse_html_cards(
     soup: BeautifulSoup, page_url: str, today: date, source: str, country: str = DEFAULT_COUNTRY
 ) -> list[dict[str, Any]]:
@@ -497,35 +514,34 @@ def parse_html_cards(
     def card_text(node: Tag) -> str:
         return normalize_prices(_card_text(node), country)
 
-    candidates: list[Tag] = []
-    for node in soup.find_all(CARD_TAGS):
-        if node.name in ("script", "style"):
-            continue
-        text = card_text(node)
-        if not text or len(text) > MAX_CARD_TEXT or not pattern.search(text):
-            continue
-        if not (_card_shop(node, text) or fallback_shop):
-            continue
-        candidates.append(node)
+    # Délky textu všech prvků jedním průchodem (děti před rodiči) – dřív se text
+    # celé stránky počítal znovu pro každý prvek, což bylo kvadratické a blokovalo HA.
+    lengths = _text_lengths(soup)
+    too_long = MAX_CARD_TEXT + 1
 
-    # necháme jen nejvnitřnější bloky (karta, ne celý seznam)
-    ids = {id(n) for n in candidates}
-    cards = [
-        node
-        for node in candidates
-        if not any(id(child) in ids for child in node.find_all(CARD_TAGS))
-    ]
+    def short(node: Tag | None) -> bool:
+        return node is not None and lengths.get(id(node), too_long) <= MAX_CARD_TEXT
+
+    cards: dict[int, Tag] = {}
+    for string in soup.find_all(string=CURRENCY_HINT_RE):
+        node = string.parent
+        if node is None or node.name in ("script", "style", "noscript"):
+            continue
+        # nejmenší blok nad cenou, který obsahuje i název obchodu (karta, ne celý seznam)
+        while node is not None and short(node):
+            if node.name in CARD_TAGS:
+                text = card_text(node)
+                if pattern.search(text) and (_card_shop(node, text) or fallback_shop):
+                    cards.setdefault(id(node), node)
+                    break
+            node = node.parent
 
     offers: list[dict[str, Any]] = []
-    for card in cards:
+    for card in cards.values():
         # bloky s cenou bývají menší než celá karta – vezmeme rodiče, který má i název
         node = card
         text = card_text(node)
-        while (
-            node.parent is not None
-            and len(card_text(node.parent)) <= MAX_CARD_TEXT
-            and not node.find(["h1", "h2", "h3", "h4", "img"])
-        ):
+        while short(node.parent) and not node.find(["h1", "h2", "h3", "h4", "img"]):
             node = node.parent
             text = card_text(node)
         shop = _card_shop(node, text) or fallback_shop
@@ -589,14 +605,14 @@ def dedupe(offers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def parse_generic(
-    html: str,
+    html: str | BeautifulSoup,
     page_url: str,
     today: date,
     source: str,
     country: str = DEFAULT_COUNTRY,
     heuristics: bool = True,
 ) -> list[dict[str, Any]]:
-    soup = BeautifulSoup(html, "html.parser")
+    soup = make_soup(html)
     offers = parse_jsonld(soup, page_url, today, source, country)
     offers += parse_embedded_json(soup, page_url, today, source, country)
     if not offers and heuristics:

@@ -48,8 +48,10 @@ def _parse_time(value: str) -> tuple[int, int, int]:
 async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool:
     coordinator = BeerDealsCoordinator(hass, entry)
     await coordinator.async_load()
-    await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    # Po restartu HA se použijí uložená data. Stahuje se jen, když od poslední plánované
+    # aktualizace žádná neproběhla – a to na pozadí, aby se start HA nezdržoval.
+    needs_refresh = not coordinator.restore_cached()
 
     options = {**entry.data, **entry.options}
 
@@ -81,6 +83,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+    if needs_refresh:
+        entry.async_create_background_task(
+            hass, coordinator.async_background_first_refresh(), f"{DOMAIN}_first_refresh"
+        )
 
     if not hass.services.has_service(DOMAIN, SERVICE_REFRESH):
 

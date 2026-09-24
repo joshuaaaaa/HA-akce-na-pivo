@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -41,6 +43,8 @@ from .const import (
     CONF_SORT_BY,
     CONF_SOURCES,
     CONF_TOP_COUNT,
+    CONF_UPDATE_INTERVAL_HOURS,
+    CONF_UPDATE_TIME,
     COUNTRIES,
     DEFAULT_COUNTRY,
     DEFAULT_DEGREES,
@@ -56,6 +60,8 @@ from .const import (
     DEFAULT_SHOP_TYPE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
+    DEFAULT_UPDATE_INTERVAL_HOURS,
+    DEFAULT_UPDATE_TIME,
     DEGREE_OPTIONS,
     DOMAIN,
     EVENT_CHEAP_BEER,
@@ -77,7 +83,14 @@ from .const import (
     country_sources,
 )
 from .generic import dedupe, parse_generic
-from .kupi import degree_group, kupi_html_sample, match_brand, normalize, parse_offers
+from .kupi import (
+    degree_group,
+    kupi_html_sample,
+    make_soup,
+    match_brand,
+    normalize,
+    parse_offers,
+)
 from .stores import (
     fetch_stores,
     haversine_km,
@@ -91,6 +104,9 @@ _LOGGER = logging.getLogger(__name__)
 
 REQUEST_DELAY = 0.7
 STORE_RETRY_MINUTES = 30
+FIRST_RETRY_MINUTES = 15
+CACHED_OFFERS = 60
+CACHED_RAW_OFFERS = 300
 NOMINATIM_DELAY = 1.1  # limit Nominatimu 1 dotaz/s
 DEAD_URL_DAYS = 7
 
@@ -270,18 +286,26 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Stažení %s selhalo: %s", url, err)
             return 0, None
 
-    def _parse(self, source: str, html: str, url: str, today: date) -> list[dict[str, Any]]:
+    def _parse(
+        self, source: str, html: str, url: str, today: date, want_sample: bool = False
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Rozparsuje stránku (jednou). Běží ve vlákně mimo smyčku HA – je to náročné na CPU."""
+        soup = make_soup(html)
+        sample = kupi_html_sample(soup) if want_sample else None
+        return self._parse_soup(source, soup, url, today), sample
+
+    def _parse_soup(self, source: str, soup: Any, url: str, today: date) -> list[dict[str, Any]]:
         if "kupi.cz" in url:
-            offers = parse_offers(html, url, today)
+            offers = parse_offers(soup, url, today)
             for offer in offers:
                 offer["source"] = source
                 offer["sources"] = [source]
             if not offers:
-                return parse_generic(html, url, today, source, self.country)
+                return parse_generic(soup, url, today, source, self.country)
             # vlastní parser kupi.cz + strukturovaná data stránky (co jeden nenajde, doplní druhý)
-            structured = parse_generic(html, url, today, source, self.country, heuristics=False)
+            structured = parse_generic(soup, url, today, source, self.country, heuristics=False)
             return dedupe(offers + structured)
-        return parse_generic(html, url, today, source, self.country)
+        return parse_generic(soup, url, today, source, self.country)
 
     async def _fetch_listing(
         self, source: str, base_url: str, max_pages: int, today: date, template: str | None = None
@@ -300,9 +324,13 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if code in (404, 410) and template and source != SOURCE_KUPI:
                         self._mark_dead(template)
                 break
-            if page == 1 and "kupi.cz" in url and "html_sample" not in status:
-                status["html_sample"] = kupi_html_sample(html)
-            page_offers = [o for o in self._parse(source, html, url, today) if o["id"] not in seen]
+            want_sample = page == 1 and "kupi.cz" in url and "html_sample" not in status
+            parsed, sample = await self.hass.async_add_executor_job(
+                self._parse, source, html, url, today, want_sample
+            )
+            if sample is not None:
+                status["html_sample"] = sample
+            page_offers = [o for o in parsed if o["id"] not in seen]
             if not page_offers:
                 if page == 1:
                     lowered = html[:20000].lower()
@@ -768,8 +796,63 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         result = self._build_result(offers, lat, lon, source)
         await self._fill_addresses(result["top"] + result["upcoming"])
         self._fire_alerts(result["offers"])
+        # poslední výsledek si uložíme – po restartu HA se použije místo nového stahování
+        self._cache["last_result"] = {
+            **result,
+            "offers": result["offers"][:CACHED_OFFERS],
+            "options_hash": self._options_hash(),
+        }
+        self._cache["raw_offers"] = self._raw_offers[:CACHED_RAW_OFFERS]
         await self._async_save()
         return result
+
+    def _options_hash(self) -> str:
+        return hashlib.sha1(
+            json.dumps(self.options, sort_keys=True, default=str).encode()
+        ).hexdigest()
+
+    def restore_cached(self) -> bool:
+        """Po restartu HA použije uložená data, pokud od poslední aktualizace nic nezmeškala.
+
+        Díky tomu se weby nestahují při každém restartu (a HA se při startu nezatěžuje).
+        """
+        cached = self._cache.get("last_result")
+        if not cached or cached.get("options_hash") != self._options_hash():
+            return False
+        updated = dt_util.parse_datetime(cached.get("updated") or "")
+        if updated is None or updated < self._last_scheduled_run():
+            return False
+        self._raw_offers = self._cache.get("raw_offers") or []
+        self.data = cached
+        self.last_update_success = True
+        return True
+
+    def _last_scheduled_run(self) -> datetime:
+        """Kdy měla proběhnout poslední plánovaná aktualizace."""
+        now = dt_util.now()
+        parts = [int(p) for p in str(self.opt(CONF_UPDATE_TIME, DEFAULT_UPDATE_TIME)).split(":")]
+        parts += [0, 0]
+        daily = now.replace(hour=parts[0], minute=parts[1], second=parts[2], microsecond=0)
+        if daily > now:
+            daily -= timedelta(days=1)
+        interval = int(self.opt(CONF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS) or 0)
+        if interval > 0:
+            return max(daily, now - timedelta(hours=interval))
+        return daily
+
+    async def async_background_first_refresh(self) -> None:
+        """První stažení na pozadí – nezdržuje start Home Assistantu."""
+        await self.async_refresh()
+        if not self.last_update_success and self.data is None:
+            _LOGGER.info(
+                "První stažení akcí se nepovedlo, další pokus za %d min", FIRST_RETRY_MINUTES
+            )
+
+            async def _retry(_now: Any) -> None:
+                await self.async_background_first_refresh()
+
+            unsub = async_call_later(self.hass, timedelta(minutes=FIRST_RETRY_MINUTES), _retry)
+            self.entry.async_on_unload(unsub)
 
     def _schedule_store_retry(self) -> None:
         """Po výpadku OpenStreetMap zkusí pobočky načíst znovu, bez nového stahování akcí."""

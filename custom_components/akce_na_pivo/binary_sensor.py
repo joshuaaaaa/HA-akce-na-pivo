@@ -22,6 +22,7 @@ async def async_setup_entry(
 class CheapBeerBinarySensor(BeerEntity, BinarySensorEntity):
     _attr_icon = "mdi:beer"
     _attr_translation_key = "cheap_beer"
+    _unrecorded_attributes = frozenset({"offers"})
 
     def __init__(self, coordinator: BeerDealsCoordinator) -> None:
         super().__init__(coordinator, "cheap_beer")

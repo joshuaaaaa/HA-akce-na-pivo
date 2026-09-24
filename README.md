@@ -339,6 +339,21 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
   konkrétní akce se tam ale může lišit (třeba hypermarket vs. supermarket).
 - Pobočky z OpenStreetMap se ukládají do mezipaměti na 7 dní a obnoví se, když se změní poloha.
 
+## Výkon a zatížení Home Assistantu
+
+- Stahování běží **jednou denně** (v nastavený čas), volitelně navíc každých N hodin.
+  Mezi požadavky jsou pauzy, aby se weby zbytečně nezatěžovaly.
+- **Zpracování HTML stránek běží ve vlákně na pozadí**, ne v hlavní smyčce HA. Každá stránka
+  se zpracuje jen jednou a obecný parser je lineární, takže velké stránky HA nezablokují.
+  Pokud má HA nainstalované `lxml`, použije se automaticky (je rychlejší).
+- **Po restartu HA se nic nestahuje.** Integrace použije poslední uložená data. Stahuje se jen
+  tehdy, když se mezitím zmeškala plánovaná aktualizace, a to na pozadí, takže start HA
+  nečeká. Po změně nastavení se stáhne znovu.
+- Pobočky z OpenStreetMap se ukládají na 7 dní. Velké diagnostické atributy se neukládají
+  do historie (recorder).
+- Na slabém hardwaru (Raspberry Pi) zmenšete zátěž tím, že vypnete zdroje, které vám nic
+  nevracejí (viz atribut `sources` senzoru **Počet akcí**), a snížíte *Max. počet stránek kupi.cz*.
+
 ## Upozornění a odpovědnost
 
 - 🔞 **Alkohol je určen pouze osobám starším 18 let.** Prodej alkoholu osobám mladším 18 let

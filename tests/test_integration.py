@@ -142,7 +142,7 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["brands"] == ["Pilsner Urquell", "Birell (nealko)", "Moje Pivo"]
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     cheapest = hass.states.get("sensor.pivo_nejlevnejsi_pivo") or hass.states.get(
         "sensor.pivo_cheapest_beer"
@@ -203,7 +203,7 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
 
     # opakovaná aktualizace nesmí znovu poslat stejnou událost
     await hass.services.async_call(DOMAIN, "refresh", {}, blocking=True)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert len(events) == 1
 
     # options flow
@@ -308,7 +308,7 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["country"] == "SK"
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     cheapest = hass.states.get("sensor.pivo_sk_cheapest_beer")
     assert cheapest is not None
@@ -377,7 +377,7 @@ async def test_packaging_filter(hass: HomeAssistant, aioclient_mock, freezer) ->
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["packaging"] == ["can"]
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     offers = hass.states.get("sensor.plech_cheapest_beer").attributes["offers"]
     assert [(o["product"], o["packaging"]) for o in offers] == [
@@ -424,7 +424,7 @@ async def test_degree_filter(hass: HomeAssistant, aioclient_mock, freezer) -> No
         },
     )
     assert result["options"]["degrees"] == ["12"]
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     cheapest = hass.states.get("sensor.dvanactka_cheapest_beer")
     assert [(o["product"], o["degree"]) for o in cheapest.attributes["offers"]] == [
@@ -458,7 +458,7 @@ async def test_language_auto_follows_home_assistant(
         {"brands": ["Zlatý Bažant", "Topvar"], "sources": ["zlacnene"], "max_pages": 1},
     )
     assert result["options"]["language"] == "auto"
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get("sensor.auto_where_to_buy_topvar").state == "Not on sale"
 
     # jazyk jde změnit v Konfiguraci
@@ -470,7 +470,7 @@ async def test_language_auto_follows_home_assistant(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**values, "language": "sk"}
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get("sensor.auto_where_to_buy_topvar").state == "Nie je v akcii"
 
 
@@ -522,7 +522,7 @@ async def test_shop_type_filter(
         },
     )
     assert result["options"]["shop_type"] == shop_type
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     cheapest = hass.states.get("sensor.obchody_cheapest_beer")
     offers = cheapest.attributes["offers"]
@@ -534,3 +534,57 @@ async def test_shop_type_filter(
         "degrees": ["10", "11", "12", "other"],
         "shop_type": shop_type,
     }
+
+
+async def test_parsing_off_event_loop_and_restart_uses_cache(
+    hass: HomeAssistant, aioclient_mock, freezer
+) -> None:
+    """Parsování HTML neblokuje smyčku HA a restart HA nestahuje weby znovu."""
+    import threading
+
+    from custom_components.akce_na_pivo.coordinator import BeerDealsCoordinator
+
+    freezer.move_to("2026-09-23 10:00:00+02:00")
+    hass.config.latitude, hass.config.longitude = 48.148, 17.107
+    aioclient_mock.get(
+        "https://www.zlacnene.sk/akciovy-tovar/napoje-alkoholicke/pivo/", text=SK_HTML
+    )
+    aioclient_mock.get(re.compile(r"^https://"), status=404)
+    aioclient_mock.post("https://overpass-api.de/api/interpreter", json=SK_OVERPASS)
+
+    threads: list[str] = []
+    original = BeerDealsCoordinator._parse
+
+    def spy(self, *args, **kwargs):
+        threads.append(threading.current_thread().name)
+        return original(self, *args, **kwargs)
+
+    with patch.object(BeerDealsCoordinator, "_parse", spy):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"name": "Cache", "language": "sk", "country": "SK"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"brands": ["Zlatý Bažant"], "sources": ["zlacnene"], "max_pages": 1},
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert threads and "MainThread" not in threads
+    assert hass.states.get("sensor.cache_cheapest_beer").state != "unknown"
+
+    # "restart": integrace se znovu načte – data jsou hned k dispozici a nic se nestahuje
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    calls_before = len(aioclient_mock.mock_calls)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(aioclient_mock.mock_calls) == calls_before
+    assert hass.states.get("sensor.cache_where_to_buy_beer").state == "Kaufland"
+
+    # po zmeškané plánované aktualizaci (další den po 7:00) se stáhne znovu
+    freezer.move_to("2026-09-24 08:00:00+02:00")
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(aioclient_mock.mock_calls) > calls_before

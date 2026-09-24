@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
 from . import BeerConfigEntry
-from .const import ALL_BRANDS, SORT_PRICE
+from .const import ALL_BRANDS, CONF_TOP_COUNT, DEFAULT_TOP_COUNT, SORT_PRICE
 from .coordinator import BeerDealsCoordinator
 from .entity import BeerEntity, offer_attributes
 from .texts import text
@@ -38,7 +38,7 @@ async def async_setup_entry(
         CheapestHalfLiterSensor(coordinator),
         OfferCountSensor(coordinator),
     ]
-    top_count = coordinator.data.get("top_count", 5) if coordinator.data else 5
+    top_count = int(coordinator.opt(CONF_TOP_COUNT, DEFAULT_TOP_COUNT))
     entities += [RankSensor(coordinator, rank) for rank in range(1, top_count + 1)]
     brands = [brand for brand in coordinator.brands if brand != ALL_BRANDS]
     entities += [BrandSensor(coordinator, brand) for brand in brands]
@@ -153,6 +153,8 @@ class OfferCountSensor(BeerEntity, SensorEntity):
     _attr_translation_key = "count"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = "akcí"
+    # diagnostika (ukázka HTML, názvy akcí) je velká – do historie ji neukládáme
+    _unrecorded_attributes = frozenset({"sources", "filter", "matching_by_source"})
 
     def __init__(self, coordinator: BeerDealsCoordinator) -> None:
         super().__init__(coordinator, "count")
