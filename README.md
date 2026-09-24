@@ -6,6 +6,11 @@ Integrace pro Home Assistant, která každý den (nebo v čase, který si nastav
 domovu nebo k poloze vašeho telefonu a ukáže ji **na mapě**. Senzor **Kam pro pivo**
 rovnou řekne, do kterého obchodu jít.
 
+> 🔞 **Prodej a konzumace alkoholu jsou povoleny pouze osobám starším 18 let.**
+> Integrace jen zobrazuje veřejně dostupné akční ceny a **nenavádí ke konzumaci alkoholu**.
+> Pijte zodpovědně a nikdy nepijte před jízdou. Podrobnosti v sekci
+> [Upozornění a odpovědnost](#upozornění-a-odpovědnost).
+
 Ve složce [`www/`](www) jsou dvě samostatné Lovelace karty. Do Home Assistantu je
 přidáte ručně (viz [Lovelace karty](#lovelace-karty-složka-www)):
 - 🍺 **[Pivní karta](#-pivní-karta)** (`custom:pivni-karta`): karta na pivním pozadí
@@ -333,6 +338,28 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
 - Kupi.cz uvádí akce za celý řetězec. Pobočka na mapě je **nejbližší prodejna daného řetězce**,
   konkrétní akce se tam ale může lišit (třeba hypermarket vs. supermarket).
 - Pobočky z OpenStreetMap se ukládají do mezipaměti na 7 dní a obnoví se, když se změní poloha.
+
+## Upozornění a odpovědnost
+
+- 🔞 **Alkohol je určen pouze osobám starším 18 let.** Prodej alkoholu osobám mladším 18 let
+  je v České republice i na Slovensku zakázán.
+- **Integrace nenavádí ani nevybízí ke konzumaci alkoholu.** Slouží jen k přehledu veřejně
+  dostupných akčních cen v obchodech. Pijte s mírou a zodpovědně. Alkohol a řízení nepatří
+  dohromady. Pokud máte s alkoholem problém, obraťte se na odbornou pomoc (v ČR např.
+  Linka pro odvykání 800 350 000).
+- **Vývojář neodpovídá za žádné problémy ani škody** vzniklé instalací nebo používáním
+  integrace a karet. To zahrnuje nesprávné, neaktuální nebo chybějící ceny, akce, adresy
+  a otevírací doby, výpadky zdrojových webů a nefunkčnost Home Assistantu. Software se
+  poskytuje „tak, jak je“ (*as is*), bez jakékoli záruky. Používáte ho na vlastní odpovědnost.
+- Ceny a akce pocházejí z webů třetích stran (kupi.cz, Kompas Slev, slovenské letákové weby…)
+  a z OpenStreetMap. Před nákupem si je vždy ověřte v obchodě nebo v aktuálním letáku.
+  Integrace není spojena s žádným obchodním řetězcem, pivovarem ani provozovatelem těchto webů.
+- Uživatel odpovídá za to, že používání integrace je v souladu s podmínkami používání
+  zdrojových webů a služeb OpenStreetMap a CARTO.
+
+> 🇸🇰 Alkohol je určený iba osobám starším ako 18 rokov. Integrácia nenabáda na pitie
+> alkoholu, iba zobrazuje verejne dostupné akciové ceny. Vývojár nezodpovedá za žiadne
+> problémy ani škody spôsobené integráciou. Softvér sa poskytuje „tak, ako je“, bez záruky.
 
 
 ## http://buymeacoffee.com/jakubhruby
