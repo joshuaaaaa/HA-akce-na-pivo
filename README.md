@@ -356,6 +356,8 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
   Integrace není spojena s žádným obchodním řetězcem, pivovarem ani provozovatelem těchto webů.
 - Uživatel odpovídá za to, že používání integrace je v souladu s podmínkami používání
   zdrojových webů a služeb OpenStreetMap a CARTO.
+- Projekt je šířen pod licencí **MIT**, viz soubor [LICENSE](LICENSE). Licence výslovně
+  vylučuje jakoukoli záruku i odpovědnost autora.
 
 > 🇸🇰 Alkohol je určený iba osobám starším ako 18 rokov. Integrácia nenabáda na pitie
 > alkoholu, iba zobrazuje verejne dostupné akciové ceny. Vývojár nezodpovedá za žiadne
