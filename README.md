@@ -1,7 +1,7 @@
 # 🍺 Akce na pivo – Home Assistant
 <img width="564" height="742" alt="image" src="https://github.com/user-attachments/assets/d0f6dd49-59af-4da9-8742-6af37f790222" />
 
-Integrace pro Home Assistant, která každý den (nebo v čase, který si nastavíte) zjistí,
+Integrace pro Home Assistant, která jednou denně (výchozí v noci v 1:00) zjistí,
 **kde je nejlevnější pivo v akci**, najde **nejbližší pobočku** daného obchodu k vašemu
 domovu nebo k poloze vašeho telefonu a ukáže ji **na mapě**. Senzor **Kam pro pivo**
 rovnou řekne, do kterého obchodu jít.
@@ -109,7 +109,7 @@ https://www.nejaky-web.cz/hledat?q={query}
 | Sklo, nebo plech | Vyberete obal: **🍾 sklo**, **🥫 plech**, **🧴 PET** (libovolná kombinace). Obal se pozná z názvu akce („plech“, „plechovka“, „lahev“, „sklo“, „fľaša“, „PET“…), pivo od 1 l se bere jako PET. Letáky obal často neuvádějí, proto volba **„Zahrnout akce, u kterých obal nejde poznat“** (výchozí zapnuto). Když ji vypnete, uvidíte jen akce s jistě uvedeným obalem. |
 | 10°, 11°, nebo 12° | Vyberete **stupňovitost**: 10° (desítka), 11° (jedenáctka), 12° (dvanáctka) a/nebo **ostatní** (výčepní 7–9°, speciály 13° a víc). Stupeň se pozná z názvu akce („Kozel 11“, „12°“, slovenské „12%“, „desítka“, „výčepní“). U známých piv bez čísla v názvu se doplní (Pilsner Urquell = 12°, Gambrinus Originál = 10°, Radegast Rázná = 10°…). Volba **„Zahrnout akce, u kterých stupeň nejde poznat“** (výchozí zapnuto) rozhodne, co s ostatními akcemi. |
 | Kamenné, nebo online | **Typ obchodu**: 🏪+🛒 kamenné i online, 🏪 **jen kamenné** (pobočka na mapě, dá se tam dojít), nebo 🛒 **jen online** (Rohlik.cz, Košík…, doručení domů). Nevybrané obchody se nezobrazí nikde, ani v senzorech, ani v kartách. |
-| Čas kontroly | Denní kontrola v zadaný čas, volitelně navíc každých N hodin. Kdykoli ručně: tlačítko **Aktualizovat akce** nebo služba `akce_na_pivo.refresh` |
+| Čas stahování | **Jednou denně**, výchozí **v 1:00 v noci**, kdy je HA nejméně vytížený a nové letáky už jsou zveřejněné. Čas jde změnit v nastavení. Kdykoli ručně: tlačítko **Aktualizovat akce** nebo služba `akce_na_pivo.refresh` |
 | Poloha | Domov HA, nebo entita `person` / `device_tracker` / `zone` (GPS telefonu). Když se posunete o víc než 2 km, nejbližší pobočky se přepočítají |
 | TOP N | Počet zobrazených nejlevnějších nabídek volíte v nastavení (1–10, výchozí 5) |
 | Mapa a adresa | U každé nabídky je nejbližší pobočka: adresa, vzdálenost, GPS, otevírací doba a odkazy na Mapy.com a navigaci |
@@ -341,14 +341,18 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
 
 ## Výkon a zatížení Home Assistantu
 
-- Stahování běží **jednou denně** (v nastavený čas), volitelně navíc každých N hodin.
-  Mezi požadavky jsou pauzy, aby se weby zbytečně nezatěžovaly.
+- Stahování běží **jen jednou denně**, výchozí **v 1:00 v noci**, kdy HA nic jiného nedělá
+  a obchody už mají zveřejněné letáky na nový den. Mezi požadavky jsou pauzy, aby se weby
+  zbytečně nezatěžovaly. Starší instalace s výchozím časem 7:00 se po aktualizaci samy
+  převedou na 1:00. Vlastní čas, pokud jste ho změnili, zůstane.
 - **Zpracování HTML stránek běží ve vlákně na pozadí**, ne v hlavní smyčce HA. Každá stránka
   se zpracuje jen jednou a obecný parser je lineární, takže velké stránky HA nezablokují.
   Pokud má HA nainstalované `lxml`, použije se automaticky (je rychlejší).
-- **Po restartu HA se nic nestahuje.** Integrace použije poslední uložená data. Stahuje se jen
-  tehdy, když se mezitím zmeškala plánovaná aktualizace, a to na pozadí, takže start HA
-  nečeká. Po změně nastavení se stáhne znovu.
+- **Po restartu HA se nic nestahuje.** Integrace použije poslední uložená data.
+  - Pokud byl HA v 1:00 vypnutý (noční stahování se zmeškalo), zobrazí se nejdřív poslední
+    data a stáhne se až **5 minut po startu HA**, aby se start nezatěžoval.
+  - Po změně nastavení (značky, zdroje, filtry…) se stáhne hned na pozadí. Změna samotného
+    času stahování žádné stahování nevyvolá.
 - Pobočky z OpenStreetMap se ukládají na 7 dní. Velké diagnostické atributy se neukládají
   do historie (recorder).
 - Na slabém hardwaru (Raspberry Pi) zmenšete zátěž tím, že vypnete zdroje, které vám nic

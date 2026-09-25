@@ -9,22 +9,22 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_change,
-    async_track_time_interval,
 )
 
 from .const import (
     CONF_LOCATION_ENTITY,
-    CONF_UPDATE_INTERVAL_HOURS,
     CONF_UPDATE_TIME,
-    DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_UPDATE_TIME,
     DOMAIN,
+    OLD_DEFAULT_UPDATE_TIME,
     PLATFORMS,
     SERVICE_REFRESH,
+    STARTUP_REFRESH_DELAY_MINUTES,
 )
-from .coordinator import BeerDealsCoordinator
+from .coordinator import CACHE_NONE, CACHE_STALE, BeerDealsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,13 +49,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool
     coordinator = BeerDealsCoordinator(hass, entry)
     await coordinator.async_load()
     entry.runtime_data = coordinator
-    # Po restartu HA se použijí uložená data. Stahuje se jen, když od poslední plánované
-    # aktualizace žádná neproběhla – a to na pozadí, aby se start HA nezdržoval.
-    needs_refresh = not coordinator.restore_cached()
+    # Po restartu HA se použijí uložená data. Stahuje se jen, když se zmeškalo noční
+    # stahování (a to s odstupem po startu), nebo když ještě žádná data nejsou.
+    cache_state = coordinator.restore_cached()
 
     options = {**entry.data, **entry.options}
 
-    # denní aktualizace v zadaný čas
+    # jediné stahování za den, výchozí v 1:00 v noci
     hour, minute, second = _parse_time(options.get(CONF_UPDATE_TIME, DEFAULT_UPDATE_TIME))
 
     async def _scheduled_refresh(_now) -> None:
@@ -64,13 +64,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool
     entry.async_on_unload(
         async_track_time_change(hass, _scheduled_refresh, hour=hour, minute=minute, second=second)
     )
-
-    # volitelně navíc každých N hodin
-    interval = int(options.get(CONF_UPDATE_INTERVAL_HOURS) or DEFAULT_UPDATE_INTERVAL_HOURS)
-    if interval > 0:
-        entry.async_on_unload(
-            async_track_time_interval(hass, _scheduled_refresh, timedelta(hours=interval))
-        )
 
     # při pohybu sledované osoby / telefonu přepočítat nejbližší obchody
     if entity_id := options.get(CONF_LOCATION_ENTITY):
@@ -83,9 +76,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
-    if needs_refresh:
+    if cache_state == CACHE_NONE:
+        # nová instalace / změna nastavení – data zatím nejsou, stáhnout hned (na pozadí)
         entry.async_create_background_task(
             hass, coordinator.async_background_first_refresh(), f"{DOMAIN}_first_refresh"
+        )
+    elif cache_state == CACHE_STALE:
+        # zmeškané noční stahování: zobrazí se poslední data, stáhne se až po startu HA
+
+        async def _delayed_refresh(_now) -> None:
+            await coordinator.async_background_first_refresh()
+
+        entry.async_on_unload(
+            async_call_later(
+                hass, timedelta(minutes=STARTUP_REFRESH_DELAY_MINUTES), _delayed_refresh
+            )
         )
 
     if not hass.services.has_service(DOMAIN, SERVICE_REFRESH):
@@ -96,6 +101,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: BeerConfigEntry) -> bool
 
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, _refresh_all)
 
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Verze 1 -> 2: stahování jen jednou denně, výchozí čas 1:00 místo 7:00."""
+    if entry.version == 1:
+        options = dict(entry.options)
+        options.pop("update_interval_hours", None)
+        if options.get(CONF_UPDATE_TIME) in (None, "", OLD_DEFAULT_UPDATE_TIME):
+            options[CONF_UPDATE_TIME] = DEFAULT_UPDATE_TIME
+        hass.config_entries.async_update_entry(entry, options=options, version=2)
+        _LOGGER.info(
+            "Akce na pivo: stahování přesunuto na %s (jednou denně)", options[CONF_UPDATE_TIME]
+        )
     return True
 
 

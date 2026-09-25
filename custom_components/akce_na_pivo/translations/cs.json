@@ -26,8 +26,7 @@
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
-          "update_time": "Čas denní kontroly",
-          "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
+          "update_time": "Čas stahování (jednou denně)",
           "top_count": "Kolik nejlevnějších nabídek zobrazit",
           "sort_by": "Řadit podle",
           "max_distance_km": "Hledat pobočky do vzdálenosti",
@@ -44,7 +43,8 @@
           "include_unknown_packaging": "Letáky obal často neuvádějí. Vypnutím zobrazíte jen akce, kde je obal jistě uvedený.",
           "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
           "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá.",
-          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě."
+          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě.",
+          "update_time": "Doporučeno v noci, např. 1:00 – HA je nejméně vytížený a nové letáky už jsou zveřejněné. Když je HA v tu dobu vypnutý, stáhne se 5 minut po jeho startu."
         }
       }
     },
@@ -67,8 +67,7 @@
           "sources": "Zdroje akcí",
           "custom_urls": "Vlastní URL stránek s akcemi (jedna na řádek)",
           "location_entity": "Poloha (osoba / telefon / zóna) – prázdné = domov HA",
-          "update_time": "Čas denní kontroly",
-          "update_interval_hours": "Navíc kontrolovat každých N hodin (0 = jen denně)",
+          "update_time": "Čas stahování (jednou denně)",
           "top_count": "Kolik nejlevnějších nabídek zobrazit",
           "sort_by": "Řadit podle",
           "max_distance_km": "Hledat pobočky do vzdálenosti",
@@ -86,7 +85,8 @@
           "degrees": "Stupeň se pozná z názvu akce (Kozel 11, 12°, 12%, desítka…). U známých piv bez čísla v názvu se doplní, např. Pilsner Urquell = 12°.",
           "include_unknown_degree": "Když je vypnuto, zobrazí se jen akce, u kterých je stupňovitost jistě známá.",
           "language": "Jazyk štítků akcí, textu „Není v akci“ a shrnutí. Automaticky = podle jazyka Home Assistantu.",
-          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě."
+          "shop_type": "Online obchody (Rohlik.cz, Košík…) doručují domů, nemají pobočku na mapě.",
+          "update_time": "Doporučeno v noci, např. 1:00 – HA je nejméně vytížený a nové letáky už jsou zveřejněné. Když je HA v tu dobu vypnutý, stáhne se 5 minut po jeho startu."
         }
       }
     },

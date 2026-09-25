@@ -26,8 +26,7 @@
           "sources": "Deal sources",
           "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
-          "update_time": "Daily check time",
-          "update_interval_hours": "Additionally check every N hours (0 = daily only)",
+          "update_time": "Download time (once a day)",
           "top_count": "How many cheapest offers to show",
           "sort_by": "Sort by",
           "max_distance_km": "Search stores within",
@@ -44,7 +43,8 @@
           "include_unknown_packaging": "Flyers often omit the packaging. Turn off to show only deals where it is stated.",
           "degrees": "Detected from the deal name (Kozel 11, 12°, 12%…). Well-known beers without a number are filled in, e.g. Pilsner Urquell = 12°.",
           "include_unknown_degree": "When off, only deals with a known degree are shown.",
-          "shop_type": "Online shops (Rohlik.cz, Košík…) deliver home and have no store on the map."
+          "shop_type": "Online shops (Rohlik.cz, Košík…) deliver home and have no store on the map.",
+          "update_time": "Night time is recommended, e.g. 1:00 – HA is least busy and new flyers are already published. If HA is off at that time, data is downloaded 5 minutes after it starts."
         }
       }
     },
@@ -67,8 +67,7 @@
           "sources": "Deal sources",
           "custom_urls": "Custom deal page URLs (one per line)",
           "location_entity": "Location (person / device tracker / zone) – empty = HA home",
-          "update_time": "Daily check time",
-          "update_interval_hours": "Additionally check every N hours (0 = daily only)",
+          "update_time": "Download time (once a day)",
           "top_count": "How many cheapest offers to show",
           "sort_by": "Sort by",
           "max_distance_km": "Search stores within",
@@ -86,7 +85,8 @@
           "degrees": "Detected from the deal name (Kozel 11, 12°, 12%…). Well-known beers without a number are filled in, e.g. Pilsner Urquell = 12°.",
           "include_unknown_degree": "When off, only deals with a known degree are shown.",
           "language": "Language of deal labels, the “Not on sale” text and summaries. Automatic = Home Assistant language.",
-          "shop_type": "Online shops (Rohlik.cz, Košík…) deliver home and have no store on the map."
+          "shop_type": "Online shops (Rohlik.cz, Košík…) deliver home and have no store on the map.",
+          "update_time": "Night time is recommended, e.g. 1:00 – HA is least busy and new flyers are already published. If HA is off at that time, data is downloaded 5 minutes after it starts."
         }
       }
     },

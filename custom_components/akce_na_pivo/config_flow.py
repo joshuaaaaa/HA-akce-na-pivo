@@ -32,7 +32,6 @@ from .const import (
     CONF_SORT_BY,
     CONF_SOURCES,
     CONF_TOP_COUNT,
-    CONF_UPDATE_INTERVAL_HOURS,
     CONF_UPDATE_TIME,
     COUNTRIES,
     DEFAULT_COUNTRY,
@@ -49,7 +48,6 @@ from .const import (
     DEFAULT_SHOP_TYPE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
-    DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_UPDATE_TIME,
     DEGREE_OPTIONS,
     DOMAIN,
@@ -192,18 +190,6 @@ def _schema(values: dict[str, Any], country: str, with_language: bool = False) -
                 CONF_UPDATE_TIME, default=values.get(CONF_UPDATE_TIME, DEFAULT_UPDATE_TIME)
             ): selector.TimeSelector(),
             vol.Required(
-                CONF_UPDATE_INTERVAL_HOURS,
-                default=values.get(CONF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=24,
-                    step=1,
-                    unit_of_measurement="h",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Required(
                 CONF_TOP_COUNT, default=values.get(CONF_TOP_COUNT, DEFAULT_TOP_COUNT)
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -277,7 +263,8 @@ def _clean(user_input: dict[str, Any], country: str) -> dict[str, Any]:
             if brand and brand not in brands:
                 brands.append(brand)
     data[CONF_BRANDS] = brands
-    for key in (CONF_UPDATE_INTERVAL_HOURS, CONF_TOP_COUNT, CONF_MAX_PAGES):
+    data.pop("update_interval_hours", None)  # ze starších verzí – stahuje se jen jednou denně
+    for key in (CONF_TOP_COUNT, CONF_MAX_PAGES):
         if key in data:
             data[key] = int(data[key])
     data[CONF_PACKAGING] = [p for p in data.get(CONF_PACKAGING) or [] if p in PACKAGING_OPTIONS]
@@ -299,7 +286,7 @@ def _clean(user_input: dict[str, Any], country: str) -> dict[str, Any]:
 class AkceNaPivoConfigFlow(ConfigFlow, domain=DOMAIN):
     """Průvodce nastavením."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._title = NAME

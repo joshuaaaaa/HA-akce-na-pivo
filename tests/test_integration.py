@@ -1,6 +1,7 @@
 """Test nastavení integrace v Home Assistantu (spustí se, jen když je HA nainstalovaný)."""
 
 import re
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,8 @@ pytest.importorskip("pytest_homeassistant_custom_component")
 from homeassistant import config_entries  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
 from homeassistant.data_entry_flow import FlowResultType  # noqa: E402
+from homeassistant.util import dt as dt_util  # noqa: E402
+from pytest_homeassistant_custom_component.common import async_fire_time_changed  # noqa: E402
 
 from custom_components.akce_na_pivo.const import DOMAIN, EVENT_CHEAP_BEER  # noqa: E402
 
@@ -128,7 +131,6 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
             "sources": ["kupi", "kompasslev", "akcniceny", "cenito"],
             "custom_urls": "",
             "update_time": "07:30:00",
-            "update_interval_hours": 0,
             "top_count": 5,
             "sort_by": "unit",
             "max_distance_km": 15,
@@ -294,7 +296,6 @@ async def test_slovakia(hass: HomeAssistant, aioclient_mock, freezer) -> None:
             "brands": ["Zlatý Bažant", "Šariš"],
             "sources": source_options,
             "update_time": "07:00:00",
-            "update_interval_hours": 0,
             "top_count": 5,
             "sort_by": "unit",
             "max_distance_km": 15,
@@ -363,7 +364,6 @@ async def test_packaging_filter(hass: HomeAssistant, aioclient_mock, freezer) ->
             "include_unknown_packaging": False,
             "sources": ["zlacnene"],
             "update_time": "07:00:00",
-            "update_interval_hours": 0,
             "top_count": 5,
             "sort_by": "unit",
             "max_distance_km": 15,
@@ -411,7 +411,6 @@ async def test_degree_filter(hass: HomeAssistant, aioclient_mock, freezer) -> No
             "include_unknown_degree": False,
             "sources": ["zlacnene"],
             "update_time": "07:00:00",
-            "update_interval_hours": 0,
             "top_count": 5,
             "sort_by": "unit",
             "max_distance_km": 15,
@@ -583,8 +582,47 @@ async def test_parsing_off_event_loop_and_restart_uses_cache(
     assert len(aioclient_mock.mock_calls) == calls_before
     assert hass.states.get("sensor.cache_where_to_buy_beer").state == "Kaufland"
 
-    # po zmeškané plánované aktualizaci (další den po 7:00) se stáhne znovu
-    freezer.move_to("2026-09-24 08:00:00+02:00")
+    # zmeškané noční stahování (o den později, po 1:00): nejdřív se ukážou stará data,
+    # stahuje se až 5 minut po startu, aby se nezatěžoval start HA
+    freezer.move_to("2026-09-25 08:00:00+02:00")
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(aioclient_mock.mock_calls) == calls_before
+    assert hass.states.get("sensor.cache_where_to_buy_beer").state == "Kaufland"
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert len(aioclient_mock.mock_calls) > calls_before
+
+
+async def test_migration_to_nightly_once_a_day(hass: HomeAssistant) -> None:
+    """Starší instalace: 7:00 + interval -> 1:00 a jen jednou denně; vlastní čas zůstane."""
+    from homeassistant.config_entries import ConfigEntryState
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    old = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        options={
+            "country": "CZ",
+            "brands": ["Kozel"],
+            "update_time": "07:00:00",
+            "update_interval_hours": 6,
+        },
+    )
+    custom = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        options={"country": "CZ", "brands": ["Kozel"], "update_time": "22:30:00"},
+    )
+    for entry in (old, custom):
+        entry.add_to_hass(hass)
+    with patch(
+        "custom_components.akce_na_pivo.coordinator.BeerDealsCoordinator.async_background_first_refresh"
+    ):
+        # nastavení integrace načte oba záznamy
+        await hass.config_entries.async_setup(old.entry_id)
+        await hass.async_block_till_done()
+    assert old.version == 2 and old.state is ConfigEntryState.LOADED
+    assert old.options["update_time"] == "01:00:00"
+    assert "update_interval_hours" not in old.options
+    assert custom.options["update_time"] == "22:30:00"

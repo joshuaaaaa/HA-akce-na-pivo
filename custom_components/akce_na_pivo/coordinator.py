@@ -43,7 +43,6 @@ from .const import (
     CONF_SORT_BY,
     CONF_SOURCES,
     CONF_TOP_COUNT,
-    CONF_UPDATE_INTERVAL_HOURS,
     CONF_UPDATE_TIME,
     COUNTRIES,
     DEFAULT_COUNTRY,
@@ -60,7 +59,6 @@ from .const import (
     DEFAULT_SHOP_TYPE,
     DEFAULT_SORT_BY,
     DEFAULT_TOP_COUNT,
-    DEFAULT_UPDATE_INTERVAL_HOURS,
     DEFAULT_UPDATE_TIME,
     DEGREE_OPTIONS,
     DOMAIN,
@@ -103,6 +101,10 @@ from .texts import resolve_language, text
 _LOGGER = logging.getLogger(__name__)
 
 REQUEST_DELAY = 0.7
+CACHE_FRESH = "fresh"
+CACHE_STALE = "stale"
+CACHE_NONE = "none"
+NOT_AFFECTING_DATA = ("update_time", "update_interval_hours")
 STORE_RETRY_MINUTES = 30
 FIRST_RETRY_MINUTES = 15
 CACHED_OFFERS = 60
@@ -807,25 +809,26 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return result
 
     def _options_hash(self) -> str:
-        return hashlib.sha1(
-            json.dumps(self.options, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        # čas stahování neovlivňuje výsledek – jeho změna nemá vyvolat nové stahování
+        relevant = {k: v for k, v in self.options.items() if k not in NOT_AFFECTING_DATA}
+        return hashlib.sha1(json.dumps(relevant, sort_keys=True, default=str).encode()).hexdigest()
 
-    def restore_cached(self) -> bool:
-        """Po restartu HA použije uložená data, pokud od poslední aktualizace nic nezmeškala.
+    def restore_cached(self) -> str:
+        """Po restartu HA použije uložená data, weby se nestahují při každém restartu.
 
-        Díky tomu se weby nestahují při každém restartu (a HA se při startu nezatěžuje).
+        Vrací CACHE_FRESH (data aktuální), CACHE_STALE (data jsou, ale noční stahování
+        se zmeškalo) nebo CACHE_NONE (data nejsou / změnilo se nastavení).
         """
         cached = self._cache.get("last_result")
         if not cached or cached.get("options_hash") != self._options_hash():
-            return False
-        updated = dt_util.parse_datetime(cached.get("updated") or "")
-        if updated is None or updated < self._last_scheduled_run():
-            return False
+            return CACHE_NONE
         self._raw_offers = self._cache.get("raw_offers") or []
         self.data = cached
         self.last_update_success = True
-        return True
+        updated = dt_util.parse_datetime(cached.get("updated") or "")
+        if updated is None or updated < self._last_scheduled_run():
+            return CACHE_STALE
+        return CACHE_FRESH
 
     def _last_scheduled_run(self) -> datetime:
         """Kdy měla proběhnout poslední plánovaná aktualizace."""
@@ -835,9 +838,6 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         daily = now.replace(hour=parts[0], minute=parts[1], second=parts[2], microsecond=0)
         if daily > now:
             daily -= timedelta(days=1)
-        interval = int(self.opt(CONF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS) or 0)
-        if interval > 0:
-            return max(daily, now - timedelta(hours=interval))
         return daily
 
     async def async_background_first_refresh(self) -> None:

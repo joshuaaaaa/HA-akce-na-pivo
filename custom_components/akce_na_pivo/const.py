@@ -11,7 +11,6 @@ PLATFORMS = ["sensor", "binary_sensor", "button"]
 CONF_BRANDS = "brands"
 CONF_LOCATION_ENTITY = "location_entity"
 CONF_UPDATE_TIME = "update_time"
-CONF_UPDATE_INTERVAL_HOURS = "update_interval_hours"
 CONF_TOP_COUNT = "top_count"
 CONF_SORT_BY = "sort_by"
 CONF_MAX_DISTANCE_KM = "max_distance_km"
@@ -50,8 +49,11 @@ SORT_OPTIONS = [SORT_UNIT, SORT_PRICE, SORT_DISTANCE]
 ALL_BRANDS = "__all__"
 
 DEFAULT_BRANDS = ["Pilsner Urquell", "Kozel", "Gambrinus"]
-DEFAULT_UPDATE_TIME = "07:00:00"
-DEFAULT_UPDATE_INTERVAL_HOURS = 0
+# Stahuje se jednou denně v noci – HA je nejméně vytížený a nové letáky už jsou venku.
+DEFAULT_UPDATE_TIME = "01:00:00"
+OLD_DEFAULT_UPDATE_TIME = "07:00:00"  # výchozí čas ve verzích do 1.9 (převádí se na 1:00)
+# zmeškané noční stahování se po startu HA provede až s odstupem
+STARTUP_REFRESH_DELAY_MINUTES = 5
 DEFAULT_TOP_COUNT = 5
 DEFAULT_SORT_BY = SORT_UNIT
 DEFAULT_MAX_DISTANCE_KM = 15
