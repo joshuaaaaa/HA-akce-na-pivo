@@ -139,11 +139,25 @@ _CHAIN_PATTERNS = [
 ]
 
 
+# rychlý předfiltr – jeden regulární výraz místo desítek (většina textů žádný řetězec neobsahuje)
+_ANY_CHAIN_RE = re.compile(
+    r"(?<![a-z])(?:"
+    + "|".join(
+        sorted(
+            {re.escape(a) for k in CHAIN_ALIASES for a in (k, *CHAIN_ALIASES[k])},
+            key=len,
+            reverse=True,
+        )
+    )
+    + r")(?![a-z])"
+)
+
+
 def detect_chain(*texts: str | None) -> str | None:
     """Najde v textu název obchodního řetězce a vrátí jeho zobrazovaný název."""
     for text in texts:
         norm = normalize(text).replace("-", " ").replace("_", " ")
-        if not norm:
+        if not norm or not _ANY_CHAIN_RE.search(norm):
             continue
         for key, pattern in _CHAIN_PATTERNS:
             if pattern.search(norm):
@@ -416,38 +430,57 @@ def _card_text(node: Tag) -> str:
     return clean_text(node.get_text(" ", strip=True))
 
 
-def _card_shop(node: Tag, text: str) -> str | None:
-    hints = [text]
-    for img in node.find_all("img"):
-        hints.append(f"{img.get('alt', '')} {img.get('title', '')} {img.get('src', '')}")
-    for tag in node.find_all(True):
-        classes = tag.get("class") or []
-        hints.append(
-            " ".join(classes) + " " + str(tag.get("data-shop") or tag.get("data-store") or "")
+def _card_shop(node: Tag, text: str, tags: list[Tag] | None = None) -> str | None:
+    # nejčastěji je obchod přímo v textu karty – to je levné
+    if found := detect_chain(text):
+        return found
+    imgs: list[str] = []
+    classes: list[str] = []
+    links: list[str] = []
+    for tag in tags if tags is not None else node.find_all(True):
+        if tag.name == "img":
+            imgs.append(f"{tag.get('alt', '')} {tag.get('title', '')} {tag.get('src', '')}")
+        classes.append(
+            " ".join(tag.get("class") or [])
+            + " "
+            + str(tag.get("data-shop") or tag.get("data-store") or "")
         )
-    for link in node.find_all("a", href=True):
-        hints.append(link["href"])
-    return detect_chain(*hints)
+        if tag.name == "a" and tag.get("href"):
+            links.append(tag["href"])
+    return detect_chain(*imgs, *classes, *links)
 
 
-def _card_name(node: Tag, text: str, pattern: re.Pattern = PRICE_RE) -> str:
-    for selector in (
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "[itemprop=name]",
-        "[class*=name]",
-        "[class*=title]",
-        "strong",
-    ):
-        found = node.select_one(selector)
-        if found:
+def _class_str(tag: Tag) -> str:
+    return " ".join(tag.get("class") or [])
+
+
+# priorita, podle které hledáme název produktu v kartě (dřív 9 drahých CSS selektorů)
+_NAME_PICKERS = (
+    lambda t: t.name == "h1",
+    lambda t: t.name == "h2",
+    lambda t: t.name == "h3",
+    lambda t: t.name == "h4",
+    lambda t: t.name == "h5",
+    lambda t: t.get("itemprop") == "name",
+    lambda t: "name" in _class_str(t),
+    lambda t: "title" in _class_str(t),
+    lambda t: t.name == "strong",
+)
+
+
+def _card_name(
+    node: Tag, text: str, pattern: re.Pattern = PRICE_RE, tags: list[Tag] | None = None
+) -> str:
+    tags = tags if tags is not None else node.find_all(True)
+    for pick in _NAME_PICKERS:
+        found = next((t for t in tags if pick(t)), None)
+        if found is not None:
             name = clean_text(found.get("title") or found.get_text(" ", strip=True))
             if name and not pattern.fullmatch(name) and len(name) > 2:
                 return name
-    for tag in node.find_all(["a", "img"]):
+    for tag in tags:
+        if tag.name not in ("a", "img"):
+            continue
         name = clean_text(tag.get("title") or tag.get("alt") or "")
         if len(name) > 2 and (detect_chain(name) is None or len(name) > 15):
             return name
@@ -456,12 +489,17 @@ def _card_name(node: Tag, text: str, pattern: re.Pattern = PRICE_RE) -> str:
 
 
 def _card_prices(
-    node: Tag, text: str, pattern: re.Pattern = PRICE_RE, country: str = DEFAULT_COUNTRY
+    node: Tag,
+    text: str,
+    pattern: re.Pattern = PRICE_RE,
+    country: str = DEFAULT_COUNTRY,
+    tags: list[Tag] | None = None,
 ) -> tuple[float | None, float | None]:
     old = None
-    for tag in node.find_all(["del", "s", "strike"]) + node.select(
-        "[class*=old], [class*=original], [class*=before]"
-    ):
+    tags = tags if tags is not None else node.find_all(True)
+    struck = [t for t in tags if t.name in ("del", "s", "strike")]
+    marked = [t for t in tags if any(w in _class_str(t) for w in ("old", "original", "before"))]
+    for tag in struck + marked:
         match = pattern.search(normalize_prices(tag.get_text(" ", strip=True), country))
         if match:
             old = to_float(match.group(1))
@@ -485,6 +523,11 @@ def _card_prices(
     return price, old
 
 
+# ochrana proti obřím stránkám – víc karet z jedné stránky nepotřebujeme
+MAX_CARDS = 1500
+# slova, podle kterých poznáme kartu s pivem (bez diakritiky)
+BEER_WORDS = ("piv", "lezak", "leziak", "vycep", "vycap", "radler", "lager", "pils", "beer", "bier")
+
 CURRENCY_HINT_RE = re.compile(r"Kč|kč|KČ|CZK|,-|€|EUR")
 
 
@@ -506,7 +549,12 @@ def _text_lengths(soup: BeautifulSoup) -> dict[int, int]:
 
 
 def parse_html_cards(
-    soup: BeautifulSoup, page_url: str, today: date, source: str, country: str = DEFAULT_COUNTRY
+    soup: BeautifulSoup,
+    page_url: str,
+    today: date,
+    source: str,
+    country: str = DEFAULT_COUNTRY,
+    keywords: tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     fallback_shop = _chain_from_url(page_url)
     pattern = price_re(country)
@@ -523,6 +571,7 @@ def parse_html_cards(
         return node is not None and lengths.get(id(node), too_long) <= MAX_CARD_TEXT
 
     cards: dict[int, Tag] = {}
+    checked: dict[int, bool] = {}  # bloky už vyhodnocené (sdílí je víc cen jedné karty)
     for string in soup.find_all(string=CURRENCY_HINT_RE):
         node = string.parent
         if node is None or node.name in ("script", "style", "noscript"):
@@ -530,11 +579,18 @@ def parse_html_cards(
         # nejmenší blok nad cenou, který obsahuje i název obchodu (karta, ne celý seznam)
         while node is not None and short(node):
             if node.name in CARD_TAGS:
-                text = card_text(node)
-                if pattern.search(text) and (_card_shop(node, text) or fallback_shop):
-                    cards.setdefault(id(node), node)
+                key = id(node)
+                if key not in checked:
+                    text = card_text(node)
+                    checked[key] = bool(
+                        pattern.search(text) and (_card_shop(node, text) or fallback_shop)
+                    )
+                if checked[key]:
+                    cards.setdefault(key, node)
                     break
             node = node.parent
+        if len(cards) >= MAX_CARDS:
+            break
 
     offers: list[dict[str, Any]] = []
     for card in cards.values():
@@ -544,9 +600,13 @@ def parse_html_cards(
         while short(node.parent) and not node.find(["h1", "h2", "h3", "h4", "img"]):
             node = node.parent
             text = card_text(node)
-        shop = _card_shop(node, text) or fallback_shop
-        price, old = _card_prices(node, text, pattern, country)
-        name = _card_name(node, text, pattern)
+        # jen karty, které se týkají piva (menu, patička, ostatní zboží se přeskočí)
+        if keywords and not any(k in normalize(text) for k in keywords):
+            continue
+        tags = node.find_all(True)
+        shop = _card_shop(node, text, tags) or fallback_shop
+        price, old = _card_prices(node, text, pattern, country, tags)
+        name = _card_name(node, text, pattern, tags)
         if not shop or price is None or not name:
             continue
         validity_match = DATE_RANGE_RE.search(text)
@@ -611,10 +671,11 @@ def parse_generic(
     source: str,
     country: str = DEFAULT_COUNTRY,
     heuristics: bool = True,
+    keywords: tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     soup = make_soup(html)
     offers = parse_jsonld(soup, page_url, today, source, country)
     offers += parse_embedded_json(soup, page_url, today, source, country)
     if not offers and heuristics:
-        offers = parse_html_cards(soup, page_url, today, source, country)
+        offers = parse_html_cards(soup, page_url, today, source, country, keywords)
     return dedupe(offers)

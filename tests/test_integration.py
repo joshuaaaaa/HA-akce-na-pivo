@@ -188,11 +188,13 @@ async def test_flow_and_setup(hass: HomeAssistant, aioclient_mock, freezer) -> N
     count = [s for s in hass.states.async_all("sensor") if "matching_by_source" in s.attributes][0]
     sources = count.attributes["sources"]
     assert sources["kupi"]["offers"] == 3
-    assert sources["kompasslev"]["offers"] == 3
+    # nevybraný Gambrinus bez slova "pivo/ležák" obecný parser vůbec nezpracuje (šetří CPU)
+    assert sources["kompasslev"]["offers"] == 2
     assert sources["cenito"]["offers"] == 0 and sources["cenito"]["errors"]
+    assert count.attributes["last_duration_s"] is not None
     stats = count.attributes["filter"]
-    assert stats["downloaded"] >= 6 and stats["matching"] == 4
-    assert stats["brand_mismatch"] == 2  # Kozel a Gambrinus z Kompasu Slev nejsou vybrané
+    assert stats["downloaded"] >= 5 and stats["matching"] == 4
+    assert stats["brand_mismatch"] == 1  # Kozel z Kompasu Slev není vybraný
     assert any("Pilsner Urquell" in line for line in stats["sample_products"])
 
     # telefon v zahraničí -> vzdálenosti se počítají od domova v ČR

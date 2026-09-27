@@ -355,6 +355,18 @@ Akce se mezitím zobrazují dál, jen bez adresy a vzdálenosti.
     času stahování žádné stahování nevyvolá.
 - Pobočky z OpenStreetMap se ukládají na 7 dní. Velké diagnostické atributy se neukládají
   do historie (recorder).
+- **Obecný parser** (slovenské weby, Kompas Slev, vlastní URL) zpracuje jen karty, které se
+  týkají piva (vybraná značka, „pivo“, „ležák“…). Menu, patičky a ostatní zboží přeskočí.
+  Velká stránka se tak zpracuje 5–8× rychleji než dřív.
+- **Pojistky proti zahlcení:**
+  - stránka nad 2,5 MB se zkrátí,
+  - z jedné stránky se vezme nejvýš 1500 karet,
+  - celé stahování má časový limit 20 minut,
+  - historie cen je omezená na 3000 produktů,
+  - přepočet obchodů při pohybu telefonu proběhne nejvýš jednou za 30 minut.
+- **Kontrola zátěže:** senzor **Počet akcí** má atribut `last_duration_s` (jak dlouho trvalo
+  poslední stahování) a u každého zdroje `sources.<zdroj>.parse_seconds`. Když zpracování
+  jedné stránky trvá přes 10 s, zapíše se do logu varování s názvem stránky.
 - Na slabém hardwaru (Raspberry Pi) zmenšete zátěž tím, že vypnete zdroje, které vám nic
   nevracejí (viz atribut `sources` senzoru **Počet akcí**), a snížíte *Max. počet stránek kupi.cz*.
 

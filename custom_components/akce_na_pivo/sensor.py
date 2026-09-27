@@ -171,6 +171,8 @@ class OfferCountSensor(BeerEntity, SensorEntity):
             "upcoming": len(data.get("upcoming", [])),
             "total_found": data.get("total_found"),
             "matching_by_source": data.get("by_source"),
+            # jak dlouho trvalo poslední stahování a zpracování (s)
+            "last_duration_s": data.get("last_duration_s"),
             # kolik akcí se stáhlo, kolik a proč se vyřadilo, ukázka stažených názvů
             "filter": data.get("filter_stats"),
             # stav jednotlivých zdrojů – pomůže, když některý web změní adresy

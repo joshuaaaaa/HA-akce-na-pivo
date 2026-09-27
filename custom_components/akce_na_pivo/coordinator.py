@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote_plus
@@ -80,8 +81,9 @@ from .const import (
     USER_AGENT,
     country_sources,
 )
-from .generic import dedupe, parse_generic
+from .generic import BEER_WORDS, dedupe, parse_generic
 from .kupi import (
+    brand_aliases,
     degree_group,
     kupi_html_sample,
     make_soup,
@@ -106,6 +108,13 @@ CACHE_STALE = "stale"
 CACHE_NONE = "none"
 NOT_AFFECTING_DATA = ("update_time", "update_interval_hours")
 STORE_RETRY_MINUTES = 30
+# pojistky proti zahlcení slabého HW (Raspberry Pi)
+MAX_HTML_CHARS = 2_500_000
+PARSE_WARN_SECONDS = 10
+UPDATE_TIMEOUT = timedelta(minutes=20)
+MAX_HISTORY_PRODUCTS = 3000
+# přepočet obchodů při pohybu telefonu nejvýš jednou za 30 minut
+RELOCATE_MIN_INTERVAL = timedelta(minutes=30)
 FIRST_RETRY_MINUTES = 15
 CACHED_OFFERS = 60
 CACHED_RAW_OFFERS = 300
@@ -158,6 +167,8 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._status: dict[str, dict[str, Any]] = {}
         self._filter_stats: dict[str, Any] = {}
         self._store_retry_unsub: Any = None
+        self._last_duration: float | None = None
+        entry.async_on_unload(self._cancel_store_retry)
 
     # ------------------------------------------------------------------ config
     @property
@@ -289,25 +300,52 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return 0, None
 
     def _parse(
-        self, source: str, html: str, url: str, today: date, want_sample: bool = False
+        self,
+        source: str,
+        html: str,
+        url: str,
+        today: date,
+        want_sample: bool = False,
+        keywords: tuple[str, ...] | None = None,
     ) -> tuple[list[dict[str, Any]], str | None]:
         """Rozparsuje stránku (jednou). Běží ve vlákně mimo smyčku HA – je to náročné na CPU."""
+        if len(html) > MAX_HTML_CHARS:
+            # obří stránka by na slabém HW (Raspberry Pi) zbytečně dlouho vytěžovala procesor
+            _LOGGER.info("Stránka %s má %d kB, zpracuje se jen začátek", url, len(html) // 1024)
+            html = html[:MAX_HTML_CHARS]
         soup = make_soup(html)
         sample = kupi_html_sample(soup) if want_sample else None
-        return self._parse_soup(source, soup, url, today), sample
+        return self._parse_soup(source, soup, url, today, keywords), sample
 
-    def _parse_soup(self, source: str, soup: Any, url: str, today: date) -> list[dict[str, Any]]:
+    @property
+    def keywords(self) -> tuple[str, ...]:
+        """Slova, podle kterých obecný parser pozná kartu s pivem (zbytek stránky přeskočí)."""
+        words = set(BEER_WORDS)
+        brands = list(KNOWN_BRANDS) if self.all_brands else self.brands
+        for brand in brands:
+            if brand != ALL_BRANDS:
+                words.update(a for a in brand_aliases(brand) if a)
+        return tuple(sorted(words))
+
+    def _parse_soup(
+        self,
+        source: str,
+        soup: Any,
+        url: str,
+        today: date,
+        keywords: tuple[str, ...] | None = None,
+    ) -> list[dict[str, Any]]:
         if "kupi.cz" in url:
             offers = parse_offers(soup, url, today)
             for offer in offers:
                 offer["source"] = source
                 offer["sources"] = [source]
             if not offers:
-                return parse_generic(soup, url, today, source, self.country)
+                return parse_generic(soup, url, today, source, self.country, keywords=keywords)
             # vlastní parser kupi.cz + strukturovaná data stránky (co jeden nenajde, doplní druhý)
             structured = parse_generic(soup, url, today, source, self.country, heuristics=False)
             return dedupe(offers + structured)
-        return parse_generic(soup, url, today, source, self.country)
+        return parse_generic(soup, url, today, source, self.country, keywords=keywords)
 
     async def _fetch_listing(
         self, source: str, base_url: str, max_pages: int, today: date, template: str | None = None
@@ -327,9 +365,20 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._mark_dead(template)
                 break
             want_sample = page == 1 and "kupi.cz" in url and "html_sample" not in status
+            started = time.monotonic()
             parsed, sample = await self.hass.async_add_executor_job(
-                self._parse, source, html, url, today, want_sample
+                self._parse, source, html, url, today, want_sample, self.keywords
             )
+            took = round(time.monotonic() - started, 1)
+            status["parse_seconds"] = max(status.get("parse_seconds", 0), took)
+            if took > PARSE_WARN_SECONDS:
+                _LOGGER.warning(
+                    "Zpracování stránky %s trvalo %.0f s (%d kB) – na slabém HW zvažte vypnutí "
+                    "tohoto zdroje",
+                    url,
+                    took,
+                    len(html) // 1024,
+                )
             if sample is not None:
                 status["html_sample"] = sample
             page_offers = [o for o in parsed if o["id"] not in seen]
@@ -685,6 +734,11 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             history[key] = {d: p for d, p in history[key].items() if d >= cutoff}
             if not history[key]:
                 del history[key]
+        if len(history) > MAX_HISTORY_PRODUCTS:
+            # ukládaný soubor nesmí růst donekonečna – necháme produkty viděné naposledy
+            keep = sorted(history, key=lambda k: max(history[k]), reverse=True)
+            for key in keep[MAX_HISTORY_PRODUCTS:]:
+                del history[key]
 
     def _fire_alerts(self, offers: list[dict[str, Any]]) -> None:
         alerted: list[str] = self._cache["alerted"]
@@ -761,6 +815,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "updated": dt_util.now().isoformat(),
             "total_found": len(offers),
             "sources": self._status,
+            "last_duration_s": self._last_duration,
             "filter_stats": self._filter_stats,
             "country": self.country,
             "currency": self.currency,
@@ -776,7 +831,20 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         async with self._lock:
             today = dt_util.now().date()
-            raw = await self._fetch_offers(today)
+            started = time.monotonic()
+            try:
+                async with asyncio.timeout(UPDATE_TIMEOUT.total_seconds()):
+                    raw = await self._fetch_offers(today)
+            except TimeoutError:
+                _LOGGER.warning(
+                    "Stahování akcí trvalo déle než %d min – přerušeno",
+                    UPDATE_TIMEOUT.total_seconds() // 60,
+                )
+                if self.data:
+                    return self.data
+                raise UpdateFailed("Stahování akcí trvalo příliš dlouho") from None
+            self._last_duration = round(time.monotonic() - started, 1)
+            _LOGGER.debug("Stahování akcí trvalo %.1f s", self._last_duration)
             if not raw:
                 if self.data:
                     _LOGGER.warning("Žádný zdroj nevrátil akce, ponechávám poslední data")
@@ -870,7 +938,6 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store_retry_unsub = async_call_later(
             self.hass, timedelta(minutes=STORE_RETRY_MINUTES), _retry
         )
-        self.entry.async_on_unload(self._cancel_store_retry)
 
     def _cancel_store_retry(self) -> None:
         if self._store_retry_unsub is not None:
@@ -881,7 +948,7 @@ class BeerDealsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Přepočítá vzdálenosti po změně polohy bez nového stahování akcí."""
         now = dt_util.utcnow()
         if not self._raw_offers or (
-            self._last_relocate and now - self._last_relocate < timedelta(minutes=10)
+            self._last_relocate and now - self._last_relocate < RELOCATE_MIN_INTERVAL
         ):
             return
         if self.data:
