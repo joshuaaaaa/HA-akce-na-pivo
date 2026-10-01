@@ -229,7 +229,7 @@ count: 5            # kolik nabídek zobrazit (1–10)
 sort: ""            # "" = podle integrace, nebo unit | price | distance
 show_map: true
 map_height: 240
-map_style: auto     # auto | carto | carto_dark | osm
+map_style: auto     # auto | carto | carto_dark | osm | embed (vložená mapa OSM, nejkompatibilnější)
 show_images: true
 show_address: true
 show_flags: true
@@ -323,6 +323,14 @@ Když chcete nahlásit chybu, pošlete tyto atributy.
 **Na mapě je „Access blocked – App is not following the tile usage policy…“.** Máte starou
 verzi karty `akce-na-pivo-card.js` (s knihovnou Leaflet a dlaždicemi OpenStreetMap). Nahraďte
 soubor v `/config/www/` novou verzí, zvyšte verzi v URL zdroje a obnovte prohlížeč (Ctrl+F5).
+
+**Na tabletu/v aplikaci vyskakuje „SSL error when loading https://…basemaps.cartocdn.com/…“.**
+Hlášku způsobuje karta *Seznam akcí s mapou*: zařízení nedokáže ověřit zabezpečený certifikát
+serveru mapových dlaždic CARTO. Bývá to špatně nastavené datum a čas na zařízení, nebo starší
+Android či zastaralé *Android System WebView* bez aktuálních certifikátů. Případně jde
+o síťový filtr nebo antivirus. Karta se po první chybě sama přepne na vloženou mapu
+OpenStreetMap a další dlaždice už nenačítá. Na takovém zařízení můžete rovnou nastavit
+`map_style: embed`. Pomůže také aktualizace *Android System WebView* a *Chrome* v Obchodě Play.
 
 **„OpenStreetMap (Overpass) nedostupné“.** Veřejné servery Overpass bývají přetížené.
 Integrace zkusí tři servery a nejdřív přesný dotaz omezený na území státu. Když neuspěje,

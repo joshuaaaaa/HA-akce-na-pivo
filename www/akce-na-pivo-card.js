@@ -11,7 +11,7 @@
  * Mapa se kreslí přímo z dlaždic OpenStreetMap – bez externích knihoven.
  */
 
-const CARD_VERSION = "2.4.0";
+const CARD_VERSION = "2.5.0";
 const FLAGS = { CZ: "🇨🇿", SK: "🇸🇰" };
 // Texty karty – čeština, slovenčina, angličtina
 const I18N = {
@@ -52,6 +52,11 @@ const HOT_FLAGS = ["history_min", "below_limit"];
 // Mapové podklady. Dlaždice přímo z tile.openstreetmap.org OSM blokuje ("Access blocked"),
 // protože Home Assistant neposílá hlavičku Referer – proto výchozí CARTO (data z OpenStreetMap).
 const RETINA = (window.devicePixelRatio || 1) > 1.5;
+// Když se dlaždice nedají načíst (např. "SSL error" na starém tabletu se zastaralými
+// certifikáty), přepne se karta na vloženou mapu OpenStreetMap a další dlaždice už nezkouší.
+let TILES_FAILED = false;
+const TILE_ERRORS_BEFORE_FALLBACK = 2;
+
 const TILE_PROVIDERS = {
   carto: {
     url: (z, x, y) => `https://${"abcd"[(x + y) % 4]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}${RETINA ? "@2x" : ""}.png`,
@@ -380,12 +385,37 @@ class AkceNaPivoCard extends HTMLElement {
     this._drawMap();
   }
 
+  // Záložní mapa: vložená stránka OpenStreetMap (funguje i tam, kde dlaždice selhávají).
+  _drawEmbed(el) {
+    const { points, home } = this._mapPoints();
+    const sel = points.find(({ i }) => i === this._selected) || points[0];
+    if (!sel) {
+      el.innerHTML = "";
+      return;
+    }
+    const lat = sel.o.latitude;
+    const lon = sel.o.longitude;
+    const dLat = 0.006;
+    const dLon = 0.012;
+    const bbox = [lon - dLon, lat - dLat, lon + dLon, lat + dLat].join(",");
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`;
+    if (el.dataset.embed === src) return; // stejná mapa – nepřekreslovat (iframe by se znovu načítal)
+    el.dataset.embed = src;
+    el.innerHTML = `<iframe class="embed" title="${esc(sel.o.store_name || sel.o.shop)}" loading="lazy" src="${src}"></iframe>`;
+    void home;
+  }
+
   _drawMap() {
     const el = this.shadowRoot.getElementById("map");
     if (!el) return;
     const width = el.clientWidth;
     const height = el.clientHeight;
     if (!width || !height) return; // karta ještě není vykreslená – překreslí ResizeObserver
+    if (TILES_FAILED || this._config.map_style === "embed") {
+      this._drawEmbed(el);
+      return;
+    }
+    delete el.dataset.embed;
     const v = this._currentView();
     if (!v) {
       el.innerHTML = "";
@@ -424,6 +454,17 @@ class AkceNaPivoCard extends HTMLElement {
         <button data-fit="1" title="${this._t("fit")}">⤢</button>
       </div>
       <div class="attribution">${provider.attribution}</div>`;
+    let errors = 0;
+    el.querySelectorAll("img.tile").forEach((img) =>
+      img.addEventListener("error", () => {
+        errors += 1;
+        if (!TILES_FAILED && errors >= TILE_ERRORS_BEFORE_FALLBACK) {
+          TILES_FAILED = true;
+          console.warn("akce-na-pivo-card: mapové dlaždice se nedaří načíst, přepínám na vloženou mapu OpenStreetMap");
+          this._drawMap();
+        }
+      })
+    );
     el.querySelectorAll(".pin[data-index]").forEach((node) =>
       node.addEventListener("click", () => this._select(Number(node.dataset.index)))
     );
@@ -446,6 +487,7 @@ const STYLE = `
   .icon-btn:hover { background: var(--secondary-background-color); }
   #map { position: relative; width: 100%; overflow: hidden; background: #e8e4d8; touch-action: none; cursor: grab; user-select: none; }
   #map .tiles { position:absolute; inset:0; }
+  #map iframe.embed { position:absolute; inset:0; width:100%; height:100%; border:0; }
   #map .tile { position:absolute; width:256px; height:256px; pointer-events:none; }
   #map .pin { position:absolute; transform: translate(-50%, -50%); cursor: pointer; z-index: 2; }
   #map .pin.home { cursor: default; background:#1976d2; font-size:14px; }
@@ -595,6 +637,7 @@ const editorSchema = (lang) => {
                 { value: "carto", label: "CARTO Voyager" },
                 { value: "carto_dark", label: "CARTO Dark" },
                 { value: "osm", label: "OpenStreetMap (může být blokované)" },
+                { value: "embed", label: "Vložená mapa OpenStreetMap (nejkompatibilnější, 1 obchod)" },
               ],
             },
           },
